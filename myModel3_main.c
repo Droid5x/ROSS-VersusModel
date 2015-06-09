@@ -152,7 +152,6 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 new_message = tw_event_data(current_event);
                 new_message->type = PROPOSE_PEACE;
                 new_message->sender = lp->gid;
-                s->resources >= input_msg->demands
                 new_message->offering = input_msg->demands;
                 s->resources -= input_msg->demands;
                 tw_event_send(current_event);
@@ -190,7 +189,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             s->resources--;
             if (s->at_war_with == -1){
                 war_field = 0;
-                if (s->resources > RESOURCE_LIM && s->offense > DOWNSCALE_LIM || health < HEALTH_LIM){
+                if ((s->resources > RESOURCE_LIM && s->offense > DOWNSCALE_LIM) || s->health < HEALTH_LIM){
                     attack_field = 0;
                     current_event = tw_event_new(lp->gid, timestamp, lp);
                     new_message = tw_event_data(current_event);
@@ -231,6 +230,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             new_message->sender = lp->gid;
             tw_event_send(current_event);
             rebuild_field = 0;
+            expand_field = 0;
             if (s->health < 100 && s->resources > RESOURCE_LIM){
                 rebuild_field = 1;
                 current_event = tw_event_new(lp->gid, timestamp, lp);
@@ -239,7 +239,6 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 new_message->sender = lp->gid;
                 tw_event_send(current_event);
             }
-            expand_field = 0;
             else if (s->resources > RESOURCE_LIM) { //if we have the resources, send an expand message
                 expand_field = 1;
                 current_event = tw_event_new(lp->gid, timestamp, lp);
@@ -257,7 +256,58 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 }
 
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
-    // This is going to be a pain to write...probably
+    switch (input_msg->type) {
+        case DECLARE_WAR:
+            if (!war_field){
+                if (fight_field) {
+                    
+                } else {
+                    
+                }
+            } else {
+                if (offer_field){
+                    
+                }
+            }
+            break;
+        case PROPOSE_PEACE:
+            s->at_war_with = input_msg->sender;
+            s->resources -= input_msg->offering;
+            break;
+        case ACCEPT_PEACE:
+            s->at_war_with = input_msg->sender;
+            break;
+        case SCALE_UP:
+            s->resources ++;
+            s->offense --;
+            break;
+        case FIGHT:
+            s->health += input_msg->damage;
+            if (!fight_field){
+                s->resources += input_msg->demands;
+            }
+            break;
+        case REBUILD:
+            s->resources ++;
+            s->health --;
+            break;
+        case SCALE_DOWN:
+            s->resources --;
+            s->offense ++;
+            break;
+        case EXPAND:
+            s->size --;
+            s->resources ++;
+            if (!war_field && attack_field) {
+                s->at_war_with = -1;
+            }
+            break;
+        case ADD_RESOURCES:
+            s->resources -= (int)(s->size*RESOURCERATE);
+            break;
+        default:
+            break;
+    }
     
 }
 
