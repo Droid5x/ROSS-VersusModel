@@ -15,7 +15,7 @@
 #define SIZE_SCALING 1.05
 #define HEALTH_LIM 30
 #define RESOURCE_LIM 10
-#define DOWNSCALE_LIM 0
+#define DOWNSCALE_LIM 5
 #define DEFAULT_SCALEUP 1
 #define DEFAULT_EXPANSION 10
 #define DEFAULT_DEMAND_AMT 7
@@ -114,7 +114,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             break;
             
         case PROPOSE_PEACE:
-            if (input_msg->sender == s->at_war_with){
+            if (input_msg->sender == s->at_war_with && s->at_war_with != -1){
                 // Note: we don't need to set any bitfield values since the else statement is irreversible (EXIT_FAILURE).
                 // Accept the offering, reset at_war_with to -1, and respond appropriately
                 s->at_war_with = -1;
@@ -126,6 +126,8 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 tw_event_send(current_event);
             } else {
                 fprintf(stderr, "ERROR: Someone we weren't fighting with asked to make peace.\n");
+                fprintf(stderr, "ERROR: \"enemy\" gid: %llu\n",input_msg->sender);
+                fprintf(stderr, "ERROR: our at_war_with: %d \n", s->at_war_with);
                 exit(EXIT_FAILURE);
             }
             break;
@@ -189,7 +191,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             s->resources--;
             if (s->at_war_with == -1){
                 war_field = 0;
-                if ((s->resources > RESOURCE_LIM && s->offense > DOWNSCALE_LIM) || s->health < HEALTH_LIM){
+                if ((s->resources > RESOURCE_LIM && s->offense > DOWNSCALE_LIM) && s->health < HEALTH_LIM){
                     attack_field = 0;
                     current_event = tw_event_new(lp->gid, timestamp, lp);
                     new_message = tw_event_data(current_event);
@@ -210,7 +212,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                         }
                     }
                     s->at_war_with = attack_gid;
-                    current_event = tw_event_new(s->at_war_with, timestamp, lp);
+                    current_event = tw_event_new(attack_gid, timestamp, lp);
                     new_message = tw_event_data(current_event);
                     new_message->type = DECLARE_WAR;
                     new_message->sender = lp->gid;
@@ -312,7 +314,17 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 }
 
 void model_final_stats(state *s, tw_lp *lp){
-    // Add satistic-collecting and reporting code here.
+    printf("\n\n====================================\n");
+    printf("LP %llu stats:\n", lp->gid);
+    printf("Health:\t%d/100\n", s->health);
+    printf("Resources:\t%d\n",s->resources);
+    printf("Offense:\t%d\n", s->offense);
+    printf("Size:\t%d\n", s->size);
+    if (s->at_war_with > -1)
+        printf("At war with LP %d.\n", s->at_war_with);
+    else
+        printf("Not at war with any LP.\n");
+    printf("====================================\n\n");
 }
 
 // Return the PE or node id given a gid
@@ -398,7 +410,6 @@ int myModel3_main(int argc, char *argv[]){
     
     
     tw_run();
-    printf("IMPORTANT OUTPUT SHOULD GO HERE.");
     
     tw_end();
     
