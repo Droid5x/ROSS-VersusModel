@@ -16,9 +16,8 @@
 #define HEALTH_LIM 30
 #define RESOURCE_LIM 5
 #define DOWNSCALE_LIM 5
-#define DEFAULT_EXPANSION 10
 #define DEFAULT_DEMAND_AMT 7
-#define NUMLPS 10
+#define NUMLPS 20
 
 //Command Line Arguments
 unsigned int setting_1 = 0;
@@ -30,7 +29,7 @@ void init(state *s, tw_lp *lp){
     tw_stime timestamp;
     message *new_message;
     // Initialize the state variables randomly
-    s->health = tw_rand_integer(lp->rng, 60, 101);
+    s->health = tw_rand_integer(lp->rng, 60, 100);
     s->resources = tw_rand_integer(lp->rng, 3, 8);
     s->offense = tw_rand_integer(lp->rng, 0, 6);
     s->size = tw_rand_integer(lp->rng, 5, 16);
@@ -60,7 +59,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 war_field = 0;      // Set the bit field to record this
                 // Update at_war_with status:
                 s->at_war_with = input_msg->sender;
-                if ( input_msg->damage < (s->health - HEALTH_LIM) && input_msg->demands < s->resources ){
+                if ( input_msg->damage < (s->health - HEALTH_LIM) || RESOURCE_LIM > s->resources - input_msg->demands ){
                     fight_field = 1;
                     // Respond to the aggressor appropriately in a Fight message
                     // prepare a message to be received in the next tick
@@ -139,6 +138,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             break;
         case ACCEPT_PEACE:
             // No logic choices, thus no bit fields
+            fprintf(stderr, "NOTE: LP %llu just made peace with LP %d.\n", lp->gid, s->at_war_with);
             s->at_war_with = -1;    // Reset at_war_with to no-one (-1)
             break;
         case SCALE_UP:
@@ -155,7 +155,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     s->health = 0;
                 }*/
                 // Now, based on current health and offensive capability compared to the enemy's, either surrender or fight back
-                if ( (s->health-input_msg->damage) < HEALTH_LIM || s->offense <= input_msg->damage){
+                if ( (s->health-input_msg->damage) < HEALTH_LIM ){//|| s->offense <= input_msg->damage){
                     fight_field = 0;
                     current_event = tw_event_new(input_msg->sender, timestamp, lp);
                     new_message = tw_event_data(current_event);
@@ -187,11 +187,11 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
         case REBUILD:
             // This is a message from past self.
             // Build up health at the cost of resources:
+            input_msg->demands = 0;     // A rather hacky way to store the change in resources and health from the while loop so that it can be reversed in the rev. event handler
             s->resources --;
             s->health++;
-            rebuild_field = 0;
-            if (s->health < 100){
-                rebuild_field = 1;
+            while (s->resources > 0 && s->health < 100){
+                input_msg->demands++;
                 s->resources --;
                 s->health ++;
             }
@@ -311,10 +311,8 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
         case REBUILD:
             s->resources ++;
             s->health --;
-            if (rebuild_field){
-                s->resources ++;
-                s->health --;
-            }
+            s->health -= input_msg->demands;
+            s->resources += input_msg->demands;
             break;
         case SCALE_DOWN:
             s->resources --;
