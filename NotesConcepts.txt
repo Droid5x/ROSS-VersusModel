@@ -1,0 +1,2 @@
+Notes & Concepts for Versus Model:
+Concept: to avoid ordering conflicts for self events, replace all self events with code that will run every time and event is received. Or Retain only resource add events, which then run the code to do self maintenance (rebuild, scaleup/scaledown, expand, and declare war.) Doing this may make the reverse event handler much more complicated though.
