@@ -48,6 +48,7 @@
 // Define message types here
 typedef enum {
     DECLARE_WAR,
+    FORCE_PEACE,
     PROPOSE_PEACE,
     ACCEPT_PEACE,
     SCALE_UP,
