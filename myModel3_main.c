@@ -25,7 +25,7 @@ void init(state *s, tw_lp *lp){
     tw_stime timestamp;
     message *new_message;
     // Initialize the state variables randomly
-    s->health = tw_rand_integer(lp->rng, 60, 100);
+    s->health = tw_rand_integer(lp->rng, 15, 100);
     s->resources = tw_rand_integer(lp->rng, 20, 50);
     s->offense = tw_rand_integer(lp->rng, 0, 6);
     s->size = tw_rand_integer(lp->rng, 5, 16);
@@ -46,7 +46,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     tw_event *current_event;
     tw_stime timestamp;
     message *new_message;
-    timestamp = tw_rand_integer(lp->rng,1,6);   // May want to change this...
+    timestamp = tw_rand_integer(lp->rng,2,6);   // May want to change this...
     if (s->resources < 0) fprintf(stderr, "ERROR: LP %llu has negative resources!\n", lp->gid);
     if (s->offense < 0) {
         fprintf(stderr, "ERROR: LP %llu has negative offense!\n", lp->gid);
@@ -68,7 +68,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     tw_event_send(current_event);
                     // Send a scale_up message to self
                     if (s->resources > RESOURCE_LIM && s->offense < UPSCALE_LIM){
-                        current_event = tw_event_new(lp->gid, 1, lp);
+                        current_event = tw_event_new(lp->gid, 2, lp);
                         new_message = tw_event_data(current_event);
                         new_message->type = SCALE_UP;
                         new_message->sender = lp->gid;
@@ -79,7 +79,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     fight_field = 0;
                     // Give the aggressor their demands in a make_peace message
                     if (s->resources >= input_msg->demands){
-                        s->resources-=input_msg->demands;
+                        s->resources -= input_msg->demands;
                         current_event = tw_event_new(input_msg->sender, 1, lp);
                         new_message = tw_event_data(current_event);
                         new_message->type = PROPOSE_PEACE;
@@ -132,8 +132,10 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             break;
         case SCALE_UP:
             // No logic choices, thus no bit fields needed for reverse handler
-            s->resources --;
-            s->offense ++;
+            if (s->resources > 0) { // Just a safety check
+                s->resources --;
+                s->offense ++;
+            }
             break;
         case FIGHT:
             if (input_msg->sender == s->at_war_with && s->at_war_with != -1){   // Sanity check
@@ -239,7 +241,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             }
             break;
         case ADD_RESOURCES:
-            s->resources += (int)(s->size*RESOURCERATE);
+            s->resources += (int)(s->size*tw_rand_unif(lp->rng)*RESOURCERATE);
             // Note that casting to int will operate identically to math.floor for positive numbers
             // Add resources proportional to the size of the entity
             // This also ensures that the LP will keep simulating by always having an ADD_RESOURCES event to respond to
@@ -315,7 +317,9 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             }
             break;
         case ADD_RESOURCES:
-            s->resources -= (int)(s->size*RESOURCERATE);
+            tw_rand_reverse_unif(lp->rng);
+            s->resources -= (int)(s->size*tw_rand_unif(lp->rng)*RESOURCERATE);
+            tw_rand_reverse_unif(lp->rng);
             break;
         default:
             break;

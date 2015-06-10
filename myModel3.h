@@ -72,8 +72,8 @@ typedef struct {
     // Add state variables here for the LPs
     int health;
     int resources;
-    unsigned int offense;
-    unsigned int size;
+    int offense;
+    int size;
     int at_war_with; // gid of the other entity (-1 if not at war)
 } state;
 
