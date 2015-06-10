@@ -11,11 +11,12 @@
 #include "ross.h"
 #include <math.h>
 
-#define RESOURCERATE 0.12
-#define SIZE_SCALING 1.05
-#define HEALTH_LIM 30
+#define RESOURCERATE 0.16
+//#define SIZE_SCALING 1.05
+#define HEALTH_LIM 8
 #define RESOURCE_LIM 5
-#define DOWNSCALE_LIM 5
+#define DOWNSCALE_LIM 0
+#define UPSCALE_LIM (100 - HEALTH_LIM)/2
 #define DEFAULT_DEMAND_AMT 7
 #define NUMLPS 20
 
@@ -30,7 +31,7 @@ void init(state *s, tw_lp *lp){
     message *new_message;
     // Initialize the state variables randomly
     s->health = tw_rand_integer(lp->rng, 60, 100);
-    s->resources = tw_rand_integer(lp->rng, 3, 8);
+    s->resources = tw_rand_integer(lp->rng, 20, 50);
     s->offense = tw_rand_integer(lp->rng, 0, 6);
     s->size = tw_rand_integer(lp->rng, 5, 16);
     s->at_war_with = -1;
@@ -50,16 +51,15 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     tw_event *current_event;
     tw_stime timestamp;
     message *new_message;
-    // We know that events always happend exactly one timestep apart, so this isn't dangerous:
-    timestamp = tw_rand_integer(lp->rng,1,4);
-
+    timestamp = tw_rand_integer(lp->rng,1,6);
+    if (s->resources < 0) fprintf(stderr, "ERROR: LP %llu has negative resources!\n", lp->gid);
     switch (input_msg->type) {
         case DECLARE_WAR:
             if (s->at_war_with == -1){  // If we aren't at war yet
                 war_field = 0;      // Set the bit field to record this
                 // Update at_war_with status:
                 s->at_war_with = input_msg->sender;
-                if ( input_msg->damage < (s->health - HEALTH_LIM) || RESOURCE_LIM > s->resources - input_msg->demands ){
+                if ( input_msg->damage < (s->health - HEALTH_LIM) ){//|| RESOURCE_LIM > s->resources - input_msg->demands ){
                     fight_field = 1;
                     // Respond to the aggressor appropriately in a Fight message
                     // prepare a message to be received in the next tick
@@ -71,11 +71,13 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     new_message->damage = s->offense;
                     tw_event_send(current_event);
                     // Send a scale_up message to self
-                    current_event = tw_event_new(lp->gid, timestamp, lp);
-                    new_message = tw_event_data(current_event);
-                    new_message->type = SCALE_UP;
-                    new_message->sender = lp->gid;
-                    tw_event_send(current_event);
+                    if (s->resources > RESOURCE_LIM && s->offense < UPSCALE_LIM){
+                        current_event = tw_event_new(lp->gid, timestamp, lp);
+                        new_message = tw_event_data(current_event);
+                        new_message->type = SCALE_UP;
+                        new_message->sender = lp->gid;
+                        tw_event_send(current_event);
+                    }
                     fprintf(stderr, "NOTE: LP %llu just retailiated war against LP %llu.\n", lp->gid, input_msg->sender);
                 } else {
                     fight_field = 0;
@@ -114,7 +116,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             
             
         case FORCE_PEACE:
-            fprintf(stderr, "RESOLUTION: LP %llu backing off from attacking LP %llu. \nBefore reset, at_war_with = %d.\n", lp->gid, input_msg->sender, s->at_war_with);
+            fprintf(stderr, "RESOLUTION: LP %llu backing off from attacking LP %llu. Before reset, at_war_with = %d.\n", lp->gid, input_msg->sender, s->at_war_with);
             s->at_war_with = -1;
             break;
             
@@ -161,10 +163,16 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     new_message = tw_event_data(current_event);
                     new_message->type = PROPOSE_PEACE;
                     new_message->sender = lp->gid;
-                    new_message->offering = input_msg->demands;
-                    s->resources -= input_msg->demands;
+                    if (s->resources >= input_msg->demands){
+                        offer_field = 1;
+                        new_message->offering = input_msg->demands;
+                        s->resources -= input_msg->demands;
+                    } else {
+                        offer_field = 0;
+                        new_message->offering = s->resources;
+                        s->resources = 0;
+                    }
                     tw_event_send(current_event);
-                    // NOTE: the resources and health can both become negative. Should this happen, logic mechanisms will cause the entity to focus on rebuilding when next possible.
                 } else {
                     // Fight Back
                     fight_field = 1;
@@ -175,6 +183,14 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     new_message->damage = s->offense;
                     new_message->demands = input_msg->demands;
                     tw_event_send(current_event);
+                    // Send a scale_up message to self
+                    if (s->resources > RESOURCE_LIM &&  s->offense < UPSCALE_LIM){
+                        current_event = tw_event_new(lp->gid, timestamp, lp);
+                        new_message = tw_event_data(current_event);
+                        new_message->type = SCALE_UP;
+                        new_message->sender = lp->gid;
+                        tw_event_send(current_event);
+                    }
                 }
             } else {
                 fprintf(stderr, "ERROR: Someone we weren't fighting tried to fight without a declaration.\n");
@@ -188,8 +204,8 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             // This is a message from past self.
             // Build up health at the cost of resources:
             input_msg->demands = 0;     // A rather hacky way to store the change in resources and health from the while loop so that it can be reversed in the rev. event handler
-            s->resources --;
-            s->health++;
+            //s->resources --;
+            //s->health++;
             while (s->resources > 0 && s->health < 100){
                 input_msg->demands++;
                 s->resources --;
@@ -309,8 +325,8 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             }
             break;
         case REBUILD:
-            s->resources ++;
-            s->health --;
+            //s->resources ++;
+            //s->health --;
             s->health -= input_msg->demands;
             s->resources += input_msg->demands;
             break;
