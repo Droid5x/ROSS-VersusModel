@@ -168,7 +168,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     }
                     else {
                         offer_field = 0;
-                        input_msg->demand = s->resources;
+                        input_msg->demands = s->resources;
                         new_message->offering = s->resources;
                         s->resources = 0;
                     }
@@ -229,7 +229,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
         case EXPAND:
             fight_field = 0;
             if (s->resources >= (int)(s->size/2)){
-                fight_field = 1
+                fight_field = 1;
                 // This is a message from past self.
                 // The bigger you already are, the harder it is to expand
                 s->resources -= (int)(s->size/2);
