@@ -33,7 +33,7 @@ void init(state *s, tw_lp *lp){
     s->health = tw_rand_integer(lp->rng, 15, 100);
     s->resources = tw_rand_integer(lp->rng, 20, 50);
     s->offense = tw_rand_integer(lp->rng, 1, 6);        // In order for the upper health limit to work, we need to avoid divide by zero errors.
-    s->size = tw_rand_integer(lp->rng, 5, 16);
+    s->size = tw_rand_integer(lp->rng, 20, 36);
     s->at_war_with = -1;
     s->health_lim = (int)(s->size/s->offense);
     s->times_defeated = 0;
@@ -168,6 +168,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     }
                     else {
                         offer_field = 0;
+                        input_msg->demand = s->resources;
                         new_message->offering = s->resources;
                         s->resources = 0;
                     }
@@ -217,23 +218,28 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
         case SCALE_DOWN:
             // No logic choices, thus no bit fields
             // This is a message from past self
+            fight_field = 1;
             if (s->offense > 1){
+                fight_field = 0;
                 s->offense--;
                 s->resources++;
             }
             break;
             
         case EXPAND:
+            fight_field = 0;
             if (s->resources >= (int)(s->size/2)){
+                fight_field = 1
                 // This is a message from past self.
                 // The bigger you already are, the harder it is to expand
                 s->resources -= (int)(s->size/2);
                 s->size++;
                 input_msg->damage = s->health_lim;  // Save the old health limit for the reverse handler
-                s->health_lim = (int)(s->size/(s->offense+10)); // We'll see if this causes any interesting behavior...
+                s->health_lim = (int)(s->size/(s->offense+5)); // We'll see if this causes any interesting behavior...
+                war_field = 1;
                 if (s->at_war_with == -1){
-                    war_field = 0;
                     if ( (s->health < HEALTH_LIM && s->offense > 0) ){
+                        war_field = 0;
                         attack_field = 0;
                         current_event = tw_event_new(lp->gid, 1, lp);
                         new_message = tw_event_data(current_event);
@@ -241,6 +247,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                         new_message->sender = lp->gid;
                         tw_event_send(current_event);
                     } else if (s->resources < RESOURCE_LIM || s->health == s->health_lim){
+                        war_field = 0;
                         attack_field = 1;
                         i = 0;
                         // Randomly choose an lp to attack (who isn't us)
@@ -299,14 +306,12 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 }
 
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
-    tw_rand_reverse_unif(lp->rng);
     switch (input_msg->type) {
         case DECLARE_WAR:
-            if (!war_field){
-                if (!fight_field)
-                    s->resources+=input_msg->demands;
-                else
-                    s->times_defeated --;
+            if (!war_field && !fight_field){
+                s->resources+=input_msg->demands;
+                s->times_defeated --;
+                s->at_war_with = input_msg->sender;
             }
             break;
         case FORCE_PEACE:
@@ -327,6 +332,7 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             if (!fight_field){
                 s->resources += input_msg->demands;
                 s->times_defeated --;
+                s->at_war_with = input_msg->sender;
             }
             break;
         case REBUILD:
@@ -334,17 +340,21 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             s->resources += input_msg->demands;
             break;
         case SCALE_DOWN:
-            s->resources --;
-            s->offense ++;
+            if (!fight_field){
+                s->resources --;
+                s->offense ++;
+            }
             break;
         case EXPAND:
-            s->size --;
-            s->resources += (int)(s->size/2);
-            s->health_lim = input_msg->damage;
-            if (!war_field && attack_field) {
-                s->at_war_with = -1;
-                s->wars_started --;
-                tw_rand_reverse_unif(lp->rng);
+            if (fight_field){
+                s->size --;
+                s->resources += (int)(s->size/2);
+                s->health_lim = input_msg->damage;
+                if (!war_field && attack_field) {
+                    s->at_war_with = -1;
+                    s->wars_started --;
+                    tw_rand_reverse_unif(lp->rng);
+                }
             }
             break;
         case ADD_RESOURCES:
@@ -354,6 +364,7 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             break;
         default:
             break;
+        tw_rand_reverse_unif(lp->rng);
     }
     
 }
