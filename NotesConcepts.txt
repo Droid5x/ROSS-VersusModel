@@ -13,3 +13,4 @@ Add Stat tracking to keep track of LP number of times surrendered, battles won, 
 -- Implemented
 
 TODO: Update the reverse event handler to match changes in the main handler
+--DONE
