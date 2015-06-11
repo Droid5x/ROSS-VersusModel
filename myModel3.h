@@ -50,7 +50,6 @@ typedef enum {
     DECLARE_WAR,
     FORCE_PEACE,
     PROPOSE_PEACE,
-    ACCEPT_PEACE,
     SCALE_UP,
     SCALE_DOWN,
     FIGHT,       //(Note that the defender always gets the first strike)
@@ -73,9 +72,14 @@ typedef struct {
     // Add state variables here for the LPs
     int health;
     int resources;
-    unsigned int offense;
-    unsigned int size;
+    int offense;
+    int size;
     int at_war_with; // gid of the other entity (-1 if not at war)
+    unsigned int health_lim;    // Upper health limit (NOT TO BE CONFUSED WITH SIMILARLY NAMED LOWER HEALTH LIMIT DEFINED IN THE .c FILE.
+    unsigned int times_defeated;
+    unsigned int times_won;
+    unsigned int wars_started;
+    
 } state;
 
 /*

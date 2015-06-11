@@ -1,0 +1,15 @@
+Notes & Concepts for Versus Model:
+Concept: to avoid ordering conflicts for self events, replace all self events with code that will run every time and event is received. Or Retain only resource add events, which then run the code to do self maintenance (rebuild, scaleup/scaledown, expand, and declare war.) Doing this may make the reverse event handler much more complicated though.
+-- Somewhat implemented by making timings for self-events stricter
+
+
+Concept: add a random element to the # of resources that the LPs get on every ADD-RESOURCES event
+-- Implemented
+
+Concept: Add a size-based relationship to the maximum health attainable. Also do something about the terribly consistent maximum scale_up value.
+- Partially Completed
+
+Add Stat tracking to keep track of LP number of times surrendered, battles won, and battles declared
+-- Implemented
+
+TODO: Update the reverse event handler to match changes in the main handler
