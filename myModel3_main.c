@@ -20,7 +20,7 @@
 #define DOWNSCALE_LIM 1
 #define UPSCALE_LIM (100 - HEALTH_LIM)//2 maybe replace this with something to do with the new LP-specific health maximum...
 #define DEFAULT_DEMAND_AMT 7
-#define NUMLPS 8
+#define NUMLPS 50
 
 // Initialize LPs (called by ROSS):
 void init(state *s, tw_lp *lp){
@@ -205,6 +205,11 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     input_msg->demands = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
                     s->offense -= input_msg->demands;
                     s->resources += input_msg->demands;
+                    if (s->offense < 0) {   // Safety check here
+                        s->resources -= s->offense;
+                        input_msg->demands += s->offense;
+                        s->offense = 0;
+                    }
                 }
                 else {  // Declare War on a random LP
                     // Randomly choose an lp to attack (who isn't us)
