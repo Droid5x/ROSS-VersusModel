@@ -18,43 +18,14 @@
 #define attack_field bf->c3
 #define rebuild_field bf->c4
 #define expand_field bf->c5
-#define field6 bf->c6
-#define field7 bf->c7
-#define field8 bf->c8
-#define field9 bf->c9
-#define field10 bf->c10
-#define field11 bf->c11
-#define field12 bf->c12
-#define field13 bf->c13
-#define field14 bf->c14
-#define field15 bf->c15
-#define field16 bf->c16
-#define field17 bf->c17
-#define field18 bf->c18
-#define field19 bf->c19
-#define field20 bf->c20
-#define field21 bf->c21
-#define field22 bf->c22
-#define field23 bf->c23
-#define field24 bf->c24
-#define field25 bf->c25
-#define field26 bf->c26
-#define field27 bf->c27
-#define field28 bf->c28
-#define field29 bf->c29
-#define field30 bf->c30
-#define field31 bf->c31
 
 // Define message types here
 typedef enum {
     DECLARE_WAR,
-    FORCE_PEACE,
-    PROPOSE_PEACE,
-    SCALE_UP,
-    SCALE_DOWN,
+    FORCE_PEACE,    // This event only exists because LPs can otherwise declare war
+                    // on already occupied LPs
+    SURRENDER,
     FIGHT,       //(Note that the defender always gets the first strike)
-    REBUILD,
-    EXPAND,
     ADD_RESOURCES
 } message_type;
 
