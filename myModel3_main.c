@@ -22,6 +22,8 @@
 #define DEFAULT_DEMAND_AMT 7
 #define NUMLPS 50
 
+final_stats * global_stats; // Used to properly print the stats for all the LPs
+
 // Initialize LPs (called by ROSS):
 void init(state *s, tw_lp *lp){
     tw_event *current_event;
@@ -214,8 +216,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 else {  // Declare War on a random LP
                     // Randomly choose an lp to attack (who isn't us)
                     int attack_gid;
-                    // TODO: make sure that this allows the LP to attack LPs on other MPI nodes
-                    attack_gid = tw_rand_integer(lp->rng,0,NUMLPS-2);
+                    attack_gid = tw_rand_integer(lp->rng,0,ttl_lps-2);
                     if (attack_gid == lp->gid)
                         attack_gid++;
                     s->at_war_with = attack_gid;
@@ -292,22 +293,15 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 }
 
 void model_final_stats(state *s, tw_lp *lp){
-    // TODO: combine all of thses individual print statements into one large print statement!
-    // Print all the LP's final state values here. (this is called for each LP)
-    printf("\n\n====================================\n");
-    printf("LP %llu stats:\n", lp->gid);
-    printf("Health:\t\t%d/%u\n", s->health, s->health_lim);
-    printf("Resources:\t%d\n",s->resources);
-    printf("Offense:\t%d\n", s->offense);
-    printf("Size:\t\t%d\n", s->size);
-    if (s->at_war_with > -1)
-        printf("At war with LP %d.\n", s->at_war_with);
-    else
-        printf("Not at war with any LP.\n");
-    printf("Wars won:\t%u\n", s->times_won);
-    printf("Wars lost:\t%u\n", s->times_defeated);
-    printf("Wars started:\t%u\n", s->wars_started);
-    printf("====================================\n\n");
+    global_stats[lp->gid].health = s->health;
+    global_stats[lp->gid].health_lim = s->health_lim;
+    global_stats[lp->gid].resources = s->resources;
+    global_stats[lp->gid].offense = s->offense;
+    global_stats[lp->gid].size = s->size;
+    global_stats[lp->gid].at_war_with = s->at_war_with;
+    global_stats[lp->gid].times_won = s->times_won;
+    global_stats[lp->gid].times_defeated = s->times_defeated;
+    global_stats[lp->gid].wars_started = s->wars_started;
 }
 
 // Return the PE or node id given a gid
@@ -357,19 +351,21 @@ int myModel3_main(int argc, char *argv[]){
     if( lookahead > 1.0 ) // Sanity check (from phold)
         tw_error(TW_LOC, "Lookahead > 1.0 .. needs to be less\n");
     
-    tw_opt_add(model_opts);
+    //tw_opt_add(model_opts);
     tw_init(&argc, &argv);
     
     //reset mean based on lookahead
-    mean = mean - lookahead;
+    //mean = mean - lookahead;
     
     g_tw_memory_nqueues = 16; // give at least 16 memory queue event
     
     offset_lpid = g_tw_mynode * nlp_per_pe;
     ttl_lps = tw_nnodes() * g_tw_npe * nlp_per_pe;
-    g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) +
-				optimistic_memory;
+    //g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) + optimistic_memory;
     //g_tw_rng_default = TW_FALSE;
+    
+    // Define the actual size of the global stats array
+    global_stats = malloc(sizeof(final_stats)*ttl_lps);
     
     g_tw_lookahead = lookahead;
     // Set up the LPs in ROSS:
@@ -397,6 +393,24 @@ int myModel3_main(int argc, char *argv[]){
     tw_run();
     
     tw_end();
+    
+    for (i = 0; i < ttl_lps; i++) {
+        // Print all the LP's final state values here. (this is called for each LP)
+        printf("\n\n====================================\n");
+        printf("LP %d stats:\n", i);
+        printf("Health:\t\t%d/%u\n", global_stats[i].health, global_stats[i].health_lim);
+        printf("Resources:\t%d\n",global_stats[i].resources);
+        printf("Offense:\t%d\n", global_stats[i].offense);
+        printf("Size:\t\t%d\n", global_stats[i].size);
+        if (global_stats[i].at_war_with > -1)
+            printf("At war with LP %d.\n", global_stats[i].at_war_with);
+        else
+            printf("Not at war with any LP.\n");
+        printf("Wars won:\t%u\n", global_stats[i].times_won);
+        printf("Wars lost:\t%u\n", global_stats[i].times_defeated);
+        printf("Wars started:\t%u\n", global_stats[i].wars_started);
+        printf("====================================\n\n");
+    }
     
     return 0;
 }

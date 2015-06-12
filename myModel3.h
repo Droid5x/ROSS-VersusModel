@@ -53,6 +53,19 @@ typedef struct {
     
 } state;
 
+
+typedef struct {
+    int health;
+    int health_lim;
+    int resources;
+    int offense;
+    int size;
+    int at_war_with;
+    int times_won;
+    int times_defeated;
+    int wars_started;
+} final_stats;
+
 /*
  * VERSUS Globals
  */
