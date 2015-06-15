@@ -21,7 +21,7 @@
 #define DOWNSCALE_LIM 1
 #define UPSCALE_LIM (100 - HEALTH_LIM)//2 maybe replace this with something to do with the new LP-specific health maximum...
 #define DEFAULT_DEMAND_AMT 7
-#define NUMLPS 20
+#define NUMLPS 4
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
 
@@ -295,8 +295,7 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 
 // Place all of the LP stats in this rank's data struct array
 void model_final_stats(state *s, tw_lp *lp){
-    int index = (int)lp->gid % nlp_per_pe;
-    printf("LP %llu has index %d\n", lp->gid, index);
+    int index = (int)lp->gid % g_tw_nlp;
     global_stats[index].health = s->health;
     global_stats[index].health_lim = s->health_lim;
     global_stats[index].resources = s->resources;
@@ -438,15 +437,16 @@ int myModel3_main(int argc, char *argv[]){
     
     
     if (g_tw_mynode != 0){
-        // Use MPI send to relay the final stats to the 0 process:
+        // Use MPI_Send to relay the final stats to the 0 process:
         MPI_Send(global_stats, nlp_per_pe, mpi_final_stats, 0, g_tw_mynode, MPI_COMM_WORLD);
+        printf("Process %ld sent its data!\n", g_tw_mynode);
     }
     else {
         // Receive and store the data:
-        for (int i = 1; i < size; i++) {
+        for (i = 1; i < size; i++) {
             MPI_Recv(buffer, nlp_per_pe, mpi_final_stats, i, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            for (int k = 0; j < nlp_per_pe; j++) {
-                global_stats[j + nlp_per_pe * i ] = buffer[j];
+            for (j = 0; j < nlp_per_pe; j++) {
+                global_stats[j + g_tw_nlp * i ] = buffer[j];
             }
         }
         for (i = 0; i < ttl_lps; i++) {
