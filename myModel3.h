@@ -69,14 +69,14 @@ typedef struct {
 /*
  * VERSUS Globals
  */
-// NOTE: Lines 52-65 were copied from the phold model and adapted
+// NOTE: The following was copied from the phold model and adapted
 tw_stime lookahead = 1.0;
 static unsigned int stagger = 0;
 static unsigned int offset_lpid = 0;
 static tw_stime mult = 1.4;
 static tw_stime percent_remote = 0.25;
 static unsigned int ttl_lps = 0;
-static unsigned int nlp_per_pe = -1; // This gets reset by #define in .c file.
+int nlp_per_pe = -1; // This gets reset by #define in .c file.
 static int g_phold_start_events = 1;
 static int optimistic_memory = 1000;
 

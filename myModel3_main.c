@@ -12,6 +12,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
+#include <stddef.h>
 
 #define RESOURCERATE 0.16
 #define SCALE_AMT 20
@@ -20,7 +21,7 @@
 #define DOWNSCALE_LIM 1
 #define UPSCALE_LIM (100 - HEALTH_LIM)//2 maybe replace this with something to do with the new LP-specific health maximum...
 #define DEFAULT_DEMAND_AMT 7
-#define NUMLPS 50
+#define NUMLPS 20
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
 
@@ -292,16 +293,19 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     
 }
 
+// Place all of the LP stats in this rank's data struct array
 void model_final_stats(state *s, tw_lp *lp){
-    global_stats[lp->gid].health = s->health;
-    global_stats[lp->gid].health_lim = s->health_lim;
-    global_stats[lp->gid].resources = s->resources;
-    global_stats[lp->gid].offense = s->offense;
-    global_stats[lp->gid].size = s->size;
-    global_stats[lp->gid].at_war_with = s->at_war_with;
-    global_stats[lp->gid].times_won = s->times_won;
-    global_stats[lp->gid].times_defeated = s->times_defeated;
-    global_stats[lp->gid].wars_started = s->wars_started;
+    int index = (int)lp->gid % nlp_per_pe;
+    printf("LP %llu has index %d\n", lp->gid, index);
+    global_stats[index].health = s->health;
+    global_stats[index].health_lim = s->health_lim;
+    global_stats[index].resources = s->resources;
+    global_stats[index].offense = s->offense;
+    global_stats[index].size = s->size;
+    global_stats[index].at_war_with = s->at_war_with;
+    global_stats[index].times_won = s->times_won;
+    global_stats[index].times_defeated = s->times_defeated;
+    global_stats[index].wars_started = s->wars_started;
 }
 
 // Return the PE or node id given a gid
@@ -342,8 +346,9 @@ const tw_optdef model_opts[] = {
 
 // Main function
 int myModel3_main(int argc, char *argv[]){
-    int i;
     srand(time(NULL));
+    int size, i, j;
+    final_stats* buffer;
     
     g_tw_memory_nqueues=1;
     nlp_per_pe = NUMLPS;
@@ -364,8 +369,15 @@ int myModel3_main(int argc, char *argv[]){
     //g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) + optimistic_memory;
     //g_tw_rng_default = TW_FALSE;
     
-    // Define the actual size of the global stats array
-    global_stats = malloc(sizeof(final_stats)*ttl_lps);
+    if (g_tw_mynode == 0) {
+        buffer = malloc(sizeof(final_stats) * nlp_per_pe);
+        // Define the actual size of the global stats array
+        global_stats = malloc(sizeof(final_stats) * ttl_lps);
+    }
+    else {
+        global_stats = malloc(sizeof(final_stats) * nlp_per_pe);
+    }
+    // Done with prep for final stats array
     
     g_tw_lookahead = lookahead;
     // Set up the LPs in ROSS:
@@ -389,28 +401,75 @@ int myModel3_main(int argc, char *argv[]){
         printf("========================================\n\n");
     }
     
-    
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    // Make the final_stats struct into an equivalent MPI version:
+    const int num_items = 9;      // There are 9 items in the final_stats struct (all ints)
+    int blocklengths[9] = {1,1,1,1,1,1,1,1,1};
+    MPI_Datatype types[9] = {
+        MPI_INT, MPI_INT,
+        MPI_INT, MPI_INT,
+        MPI_INT, MPI_INT,
+        MPI_INT, MPI_INT,
+        MPI_INT
+    };
+    MPI_Datatype mpi_final_stats;
+    MPI_Aint offsets[9] = {
+        offsetof(final_stats, health),
+        offsetof(final_stats, health_lim),
+        offsetof(final_stats, resources),
+        offsetof(final_stats, offense),
+        offsetof(final_stats, size),
+        offsetof(final_stats, at_war_with),
+        offsetof(final_stats, times_won),
+        offsetof(final_stats, times_defeated),
+        offsetof(final_stats, wars_started)
+    };
+    MPI_Type_create_struct(num_items, blocklengths, offsets, types, &mpi_final_stats);
+    MPI_Type_commit(&mpi_final_stats);
+    // Done creating mpi type
+
     tw_run();
     
-    tw_end();
+    // The code in tw_end();
+    //if(tw_ismaster()) {
+    //    fprintf(g_tw_csv, "\n");
+    //    fclose(g_tw_csv);
+    //}
     
-    for (i = 0; i < ttl_lps; i++) {
-        // Print all the LP's final state values here. (this is called for each LP)
-        printf("\n\n====================================\n");
-        printf("LP %d stats:\n", i);
-        printf("Health:\t\t%d/%u\n", global_stats[i].health, global_stats[i].health_lim);
-        printf("Resources:\t%d\n",global_stats[i].resources);
-        printf("Offense:\t%d\n", global_stats[i].offense);
-        printf("Size:\t\t%d\n", global_stats[i].size);
-        if (global_stats[i].at_war_with > -1)
-            printf("At war with LP %d.\n", global_stats[i].at_war_with);
-        else
-            printf("Not at war with any LP.\n");
-        printf("Wars won:\t%u\n", global_stats[i].times_won);
-        printf("Wars lost:\t%u\n", global_stats[i].times_defeated);
-        printf("Wars started:\t%u\n", global_stats[i].wars_started);
-        printf("====================================\n\n");
+    
+    if (g_tw_mynode != 0){
+        // Use MPI send to relay the final stats to the 0 process:
+        MPI_Send(global_stats, nlp_per_pe, mpi_final_stats, 0, g_tw_mynode, MPI_COMM_WORLD);
     }
+    else {
+        // Receive and store the data:
+        for (int i = 1; i < size; i++) {
+            MPI_Recv(buffer, nlp_per_pe, mpi_final_stats, i, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            for (int k = 0; j < nlp_per_pe; j++) {
+                global_stats[j + nlp_per_pe * i ] = buffer[j];
+            }
+        }
+        for (i = 0; i < ttl_lps; i++) {
+            // Print all the LP's final state values here. (this is called for each LP)
+            printf("\n\n====================================\n");
+            printf("LP %d stats:\n", i);
+            printf("Health:\t\t%d/%u\n", global_stats[i].health, global_stats[i].health_lim);
+            printf("Resources:\t%d\n",global_stats[i].resources);
+            printf("Offense:\t%d\n", global_stats[i].offense);
+            printf("Size:\t\t%d\n", global_stats[i].size);
+            if (global_stats[i].at_war_with > -1)
+                printf("At war with LP %d.\n", global_stats[i].at_war_with);
+            else
+                printf("Not at war with any LP.\n");
+            printf("Wars won:\t%u\n", global_stats[i].times_won);
+            printf("Wars lost:\t%u\n", global_stats[i].times_defeated);
+            printf("Wars started:\t%u\n", global_stats[i].wars_started);
+            printf("====================================\n\n");
+        }
+    }
+    MPI_Type_free(&mpi_final_stats);
+    //tw_net_stop();
+    tw_end();
     
     return 0;
 }

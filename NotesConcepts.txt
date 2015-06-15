@@ -20,8 +20,9 @@ TODO: Update the reverse event handler to match changes in the main handler
 
 6/12/15:
 TODO: Cull as many internal LP events as possible and incorportate them into ADD_RESOURCES. External events should stay but be refined, probably.
--- IN PROGRESS
+-- DONE
 
+6/15/15
 TODO: Update the reverse event handler to match changes in the main handler...in time.
 
-TODO: Fix LP-Stat printouts, since they seem to interrupt each other and overlap.
+TODO: Fix LP-Stat printouts, since they seem to interrupt each other and overlap. Implement by using MPI send/recieve calls to transfer the final data back and forth.
