@@ -25,6 +25,7 @@
 #define DEBUG 1
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
+char reverse_flag = 0;
 
 // Initialize LPs (called by ROSS):
 void init(state *s, tw_lp *lp){
@@ -33,7 +34,7 @@ void init(state *s, tw_lp *lp){
     message *new_message;
     unsigned int value = rand();
     unsigned int times[] = {value, value, value, value};
-    // Initialize the state variables randomly
+    // Initialize the state variables randomly (or as specific values in debug mode)
     if (DEBUG) {
         s->health = 99;
         s->resources = 15;
@@ -74,6 +75,8 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     timestamp = tw_rand_exponential(lp->rng,50);
     // Sanity Checks and Error Messages:
     if (s->resources < 0) fprintf(stderr, "ERROR: LP %llu has negative resources!\n", lp->gid);
+    if (s->health < 0) fprintf(stderr, "ERROR: LP %llu has negative health!\n", lp->gid);
+    if (s->health_lim < 2) fprintf(stderr, "ERROR: LP %llu has too-small health limit! THIS IS BAD!\n", lp->gid);
     if (s->offense < 0) {
         fprintf(stderr, "ERROR: LP %llu has negative offense!\n", lp->gid);
         // Exit because this could have caused a divide by zero error.
@@ -293,6 +296,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 }
 
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
+    reverse_flag = 1;
     switch (input_msg->type) {
         case FORCE_PEACE:
             s->at_war_with = input_msg->sender;
@@ -413,7 +417,6 @@ int myModel3_main(int argc, char *argv[]){
     int size, i, j;
     final_stats* buffer;
     
-    g_tw_memory_nqueues=1;
     nlp_per_pe = NUMLPS;
     lookahead=1.0;
     if( lookahead > 1.0 ) // Sanity check (from phold)
@@ -425,7 +428,6 @@ int myModel3_main(int argc, char *argv[]){
     //reset mean based on lookahead
     //mean = mean - lookahead;
     
-    //g_tw_memory_nqueues = 16; // give at least 16 memory queue event
     
     //offset_lpid = g_tw_mynode * nlp_per_pe;
     ttl_lps = tw_nnodes() * g_tw_npe * nlp_per_pe;
@@ -542,6 +544,10 @@ int myModel3_main(int argc, char *argv[]){
                 printf("====================================\n\n");
             }
         }
+    }
+    
+    if (reverse_flag && DEBUG){
+        printf("The reverse event handler was called at least once.\n");
     }
     MPI_Type_free(&mpi_final_stats);
     
