@@ -21,7 +21,8 @@
 #define DOWNSCALE_LIM 1
 #define UPSCALE_LIM (100 - HEALTH_LIM)//2 maybe replace this with something to do with the new LP-specific health maximum...
 #define DEFAULT_DEMAND_AMT 7
-#define NUMLPS 10
+#define NUMLPS 1
+#define DEBUG 1
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
 
@@ -34,13 +35,23 @@ void init(state *s, tw_lp *lp){
     unsigned int times[] = {value, value, value, value};
     // Initialize the state variables randomly
     rng_set_seed(lp->rng, times);
-    s->health = tw_rand_integer(lp->rng, 15, 100);
-    s->resources = tw_rand_integer(lp->rng, 20, 50);
-    s->offense = tw_rand_integer(lp->rng, 1, 6);        // In order for the upper health limit to work
-                                                        // we need to avoid divide by zero errors and generate numbers only from 1 to some upper bound.
-    s->size = tw_rand_integer(lp->rng, 20, 36);
-    s->at_war_with = -1;
-    s->health_lim = (int)(s->size/s->offense);
+    if (DEBUG) {
+        s->health = 99;
+        s->resources = 15;
+        s->offense = 2;
+        s->size = 5;
+        s->at_war_with = -1;
+        s->health_lim = 100;
+    }
+    else {
+        s->health = tw_rand_integer(lp->rng, 15, 100);
+        s->resources = tw_rand_integer(lp->rng, 20, 50);
+        s->offense = tw_rand_integer(lp->rng, 1, 6);        // In order for the upper health limit to work
+                                                            // we need to avoid divide by zero errors and generate numbers only from 1 to some upper bound.
+        s->size = tw_rand_integer(lp->rng, 20, 36);
+        s->at_war_with = -1;
+        s->health_lim = (int)(s->size/s->offense);
+    }
     s->times_defeated = 0;
     s->times_won = 0;
     s->wars_started = 0;
@@ -134,12 +145,10 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     new_message->sender = lp->gid;
                     // Pay as much of the demands as possible:
                     if (s->resources >= input_msg->demands){
-                        field2 = 1;
                         new_message->offering = input_msg->demands;
                         s->resources -= input_msg->demands;
                     }
                     else {
-                        field2 = 0;
                         input_msg->demands = s->resources;
                         new_message->offering = s->resources;
                         s->resources = 0;
@@ -171,7 +180,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
         case ADD_RESOURCES:
             // Note that casting to int will operate identically to math's floor function for positive numbers
             // Add resources proportional to the size of the entity
-            s->resources += (int)(s->size*tw_rand_unif(lp->rng)*RESOURCERATE);
+            s->resources += (int)(s->size * tw_rand_unif(lp->rng) * RESOURCERATE);
             // This also ensures that the LP will keep simulating by always having an ADD_RESOURCES event to respond to
             current_event = tw_event_new(lp->gid, timestamp + 3, lp);
             new_message = tw_event_data(current_event);
@@ -224,21 +233,24 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 }
                 else {  // Declare War on a random LP
                     // Randomly choose an lp to attack (who isn't us)
-                    int attack_gid;
-                    attack_gid = tw_rand_integer(lp->rng,0,ttl_lps-2);
-                    if (attack_gid == lp->gid)
-                        attack_gid++;
-                    s->at_war_with = attack_gid;
-                    // Generate and send the declaration
-                    current_event = tw_event_new(attack_gid, timestamp + 2, lp);
-                    new_message = tw_event_data(current_event);
-                    new_message->type = DECLARE_WAR;
-                    new_message->sender = lp->gid;
-                    new_message->demands = DEFAULT_DEMAND_AMT;
-                    new_message->damage = s->offense;
-                    tw_event_send(current_event);
-                    s->wars_started ++;
-                    fprintf(stderr, "NOTE: LP %llu sent a war declaration on LP %d.\n", lp->gid, attack_gid);
+                    if (ttl_lps > 1) {  // Safety check
+                        field4 = 1;
+                        int attack_gid;
+                        attack_gid = tw_rand_integer(lp->rng,0,ttl_lps-2);
+                        if (attack_gid == lp->gid)
+                            attack_gid++;
+                        s->at_war_with = attack_gid;
+                        // Generate and send the declaration
+                        current_event = tw_event_new(attack_gid, timestamp + 2, lp);
+                        new_message = tw_event_data(current_event);
+                        new_message->type = DECLARE_WAR;
+                        new_message->sender = lp->gid;
+                        new_message->demands = DEFAULT_DEMAND_AMT;
+                        new_message->damage = s->offense;
+                        tw_event_send(current_event);
+                        s->wars_started ++;
+                        fprintf(stderr, "NOTE: LP %llu sent a war declaration on LP %d.\n", lp->gid, attack_gid);
+                    }
                 }
             }
             else if (s->resources > (int)s->size/3){   // We have nothing else to do, so expand the empire
@@ -282,10 +294,12 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     switch (input_msg->type) {
         case DECLARE_WAR:
-            if (!field0 && !field1) {
-                s->resources += input_msg->demands;
-                s->times_defeated --;
-                // No need to change at_war_with because we've undone the entire war declaration, which is the event that sets at_war_with to a valid id.
+            if (!field0) {
+                s->at_war_with = -1;
+                if (!field1) {
+                    s->resources += input_msg->demands;
+                    s->times_defeated --;
+                }
             }
             break;
         case FIGHT:
@@ -297,9 +311,6 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             }
             break;
         case ADD_RESOURCES:
-            tw_rand_reverse_unif(lp->rng);  // Reverse once to recover the old value
-            s->resources -= (int)(s->size * tw_rand_reverse_unif(lp->rng) * RESOURCERATE);
-            tw_rand_reverse_unif(lp->rng);  // Reverse again to undo it
             if (field0) {
                 s->health -= input_msg->damage;
                 s->resources += input_msg->damage;
@@ -307,15 +318,18 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             if (field1 && !field2) {
                 s->offense -= input_msg->demands;
                 s->resources += input_msg->demands;
+                tw_rand_reverse_unif(lp->rng);
             }
             else if (field1 && field2) {
                 if (field3) {
                     s->offense += input_msg->demands;
                     s->resources -= input_msg->demands;
+                    tw_rand_reverse_unif(lp->rng);
                 }
-                else {
+                else if (field4) {
                     s->at_war_with = -1;
                     s->wars_started --;
+                    tw_rand_reverse_unif(lp->rng);
                 }
             }
             else if (!field1 && field2) {
@@ -323,6 +337,9 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 s->size --;
                 s->resources += (int)s->size/3;
             }
+            tw_rand_reverse_unif(lp->rng);  // Reverse once to recover the old value
+            s->resources -= (int)(s->size * tw_rand_unif(lp->rng) * RESOURCERATE);
+            tw_rand_reverse_unif(lp->rng);  // Reverse again to undo it
             break;
         case SURRENDER:
             s->times_won --;
@@ -488,21 +505,40 @@ int myModel3_main(int argc, char *argv[]){
             }
         }
         for (i = 0; i < ttl_lps; i++) {
-            // Print all the LP's final state values here. (this is called for each LP)
-            printf("\n\n====================================\n");
-            printf("LP %d stats:\n", i);
-            printf("Health:\t\t%d/%u\n", global_stats[i].health, global_stats[i].health_lim);
-            printf("Resources:\t%d\n",global_stats[i].resources);
-            printf("Offense:\t%d\n", global_stats[i].offense);
-            printf("Size:\t\t%d\n", global_stats[i].size);
-            if (global_stats[i].at_war_with > -1)
-                printf("At war with LP %d.\n", global_stats[i].at_war_with);
-            else
-                printf("Not at war with any LP.\n");
-            printf("Wars won:\t%u\n", global_stats[i].times_won);
-            printf("Wars lost:\t%u\n", global_stats[i].times_defeated);
-            printf("Wars started:\t%u\n", global_stats[i].wars_started);
-            printf("====================================\n\n");
+            if (DEBUG) {
+                // Print all the LP's final state values here. (this is called for each LP)
+                printf("\n\n====================================\n");
+                printf("LP %d stats:\n", i);
+                printf("Health:\t\t%d/%u (SHOULD BE 99/100)\n", global_stats[i].health, global_stats[i].health_lim);
+                printf("Resources:\t%d (SHOULD BE 15)\n",global_stats[i].resources);
+                printf("Offense:\t%d (SHOULD BE 2)\n", global_stats[i].offense);
+                printf("Size:\t\t%d (SHOULD BE 5)\n", global_stats[i].size);
+                if (global_stats[i].at_war_with > -1)
+                    printf("At war with LP %d.\n", global_stats[i].at_war_with);
+                else
+                    printf("Not at war with any LP.\n");
+                printf("Wars won:\t%u\n", global_stats[i].times_won);
+                printf("Wars lost:\t%u\n", global_stats[i].times_defeated);
+                printf("Wars started:\t%u\n", global_stats[i].wars_started);
+                printf("====================================\n\n");
+            }
+            else {
+                // Print all the LP's final state values here. (this is called for each LP)
+                printf("\n\n====================================\n");
+                printf("LP %d stats:\n", i);
+                printf("Health:\t\t%d/%u\n", global_stats[i].health, global_stats[i].health_lim);
+                printf("Resources:\t%d\n",global_stats[i].resources);
+                printf("Offense:\t%d\n", global_stats[i].offense);
+                printf("Size:\t\t%d\n", global_stats[i].size);
+                if (global_stats[i].at_war_with > -1)
+                    printf("At war with LP %d.\n", global_stats[i].at_war_with);
+                else
+                    printf("Not at war with any LP.\n");
+                printf("Wars won:\t%u\n", global_stats[i].times_won);
+                printf("Wars lost:\t%u\n", global_stats[i].times_defeated);
+                printf("Wars started:\t%u\n", global_stats[i].wars_started);
+                printf("====================================\n\n");
+            }
         }
     }
     MPI_Type_free(&mpi_final_stats);
