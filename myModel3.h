@@ -33,37 +33,37 @@ typedef enum {
 typedef struct {
     message_type type;
     tw_lpid sender;
-    int damage;     // The damage caused by the sender
-    int demands;    // Amt resources demanded by the sender or amt scale_up demanded of self.
-    int offering;   // Amt resources given by the sender
+    long int damage;     // The damage caused by the sender
+    long int demands;    // Amt resources demanded by the sender or amt scale_up demanded of self.
+    long int offering;   // Amt resources given by the sender
     // Maybe add other things here...
 } message;
 
 typedef struct {
     // Add state variables here for the LPs
-    int health;
-    int resources;
-    int offense;
-    int size;
-    int at_war_with; // gid of the other entity (-1 if not at war)
-    unsigned int health_lim;    // Upper health limit (NOT TO BE CONFUSED WITH SIMILARLY NAMED LOWER HEALTH LIMIT DEFINED IN THE .c FILE.
-    unsigned int times_defeated;
-    unsigned int times_won;
-    unsigned int wars_started;
+    long int health;
+    long int resources;
+    long int offense;
+    long int size;
+    long int at_war_with; // gid of the other entity (-1 if not at war)
+    long unsigned int health_lim;    // Upper health limit (NOT TO BE CONFUSED WITH SIMILARLY NAMED LOWER HEALTH LIMIT DEFINED IN THE .c FILE.
+    long unsigned int times_defeated;
+    long unsigned int times_won;
+    long unsigned int wars_started;
     
 } state;
 
 
 typedef struct {
-    int health;
-    int health_lim;
-    int resources;
-    int offense;
-    int size;
-    int at_war_with;
-    int times_won;
-    int times_defeated;
-    int wars_started;
+    long int health;
+    long int health_lim;
+    long int resources;
+    long int offense;
+    long int size;
+    long int at_war_with;
+    long int times_won;
+    long int times_defeated;
+    long int wars_started;
 } final_stats;
 
 /*

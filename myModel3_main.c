@@ -71,7 +71,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     tw_event *current_event;
     tw_stime timestamp;
     message *new_message;
-    timestamp = tw_rand_exponential(lp->rng,200);
+    timestamp = tw_rand_exponential(lp->rng,50);
     // Sanity Checks and Error Messages:
     if (s->resources < 0) fprintf(stderr, "ERROR: LP %llu has negative resources!\n", lp->gid);
     if (s->offense < 0) {
@@ -293,6 +293,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 }
 
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
+    printf("Hello World!\n");
     switch (input_msg->type) {
         case FORCE_PEACE:
             s->at_war_with = input_msg->sender;
@@ -423,11 +424,11 @@ int myModel3_main(int argc, char *argv[]){
     tw_init(&argc, &argv);
     
     //reset mean based on lookahead
-    mean = mean - lookahead;
+    //mean = mean - lookahead;
     
-    g_tw_memory_nqueues = 16; // give at least 16 memory queue event
+    //g_tw_memory_nqueues = 16; // give at least 16 memory queue event
     
-    offset_lpid = g_tw_mynode * nlp_per_pe;
+    //offset_lpid = g_tw_mynode * nlp_per_pe;
     ttl_lps = tw_nnodes() * g_tw_npe * nlp_per_pe;
     g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) + optimistic_memory;
     
@@ -441,7 +442,7 @@ int myModel3_main(int argc, char *argv[]){
     }
     // Done with prep for final stats array
     
-    g_tw_lookahead = lookahead;
+    //g_tw_lookahead = lookahead;
     // Set up the LPs in ROSS:
     tw_define_lps(nlp_per_pe, sizeof(message), 0);
     for (i = 0; i < NUMLPS; i++){
@@ -542,6 +543,7 @@ int myModel3_main(int argc, char *argv[]){
         }
     }
     MPI_Type_free(&mpi_final_stats);
+    
     tw_end();
     
     return 0;
