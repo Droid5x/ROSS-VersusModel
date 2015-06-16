@@ -12,12 +12,12 @@
 #include <stdio.h>
 #include "ross.h"
 // defines to more easily handle the bit field locations:
-#define war_field bf->c0
-#define fight_field bf->c1
-#define offer_field bf->c2
-#define attack_field bf->c3
-#define rebuild_field bf->c4
-#define expand_field bf->c5
+#define field0 bf->c0
+#define field1 bf->c1
+#define field2 bf->c2
+#define field3 bf->c3
+#define field4 bf->c4
+#define field5 bf->c5
 
 // Define message types here
 typedef enum {

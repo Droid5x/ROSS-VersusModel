@@ -21,7 +21,7 @@
 #define DOWNSCALE_LIM 1
 #define UPSCALE_LIM (100 - HEALTH_LIM)//2 maybe replace this with something to do with the new LP-specific health maximum...
 #define DEFAULT_DEMAND_AMT 7
-#define NUMLPS 4
+#define NUMLPS 10
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
 
@@ -59,27 +59,24 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     tw_event *current_event;
     tw_stime timestamp;
     message *new_message;
-    timestamp = tw_rand_integer(lp->rng, 30, 322);   // May want to change this...
-    //timestamp = tw_rand_exponential(lp->rng,322);   // May want to change this...
-    
-    
-    // Sanity Checks:
+    timestamp = tw_rand_exponential(lp->rng,400);
+    // Sanity Checks and Error Messages:
     if (s->resources < 0) fprintf(stderr, "ERROR: LP %llu has negative resources!\n", lp->gid);
     if (s->offense < 0) {
         fprintf(stderr, "ERROR: LP %llu has negative offense!\n", lp->gid);
-        // Exit because this could have caused a divide by zero error anyways.
+        // Exit because this could have caused a divide by zero error.
         exit(EXIT_FAILURE);
     }
     // Onto Event Handling:
     switch (input_msg->type) {
         case DECLARE_WAR:               // We have just received a war declaration from someone.
             if (s->at_war_with == -1){  // We aren't at war yet with anyone else
-                war_field = 0;          // Set the bit field to record this for the reverse handler
+                field0 = 0;          // Set the bit field to record this for the reverse handler
                 fprintf(stderr, "NOTE: LP %llu just declared war on LP %llu.\n", input_msg->sender, lp->gid);
                 s->at_war_with = input_msg->sender; // Update at_war_with new combatant
                 if ( input_msg->damage < (s->health - HEALTH_LIM) ){    // Respond to the aggressor appropriately in a Fight message
-                    fight_field = 1;    // Record that we decided to fight
-                    current_event = tw_event_new(input_msg->sender, timestamp, lp);
+                    field1 = 1;    // Record that we decided to fight
+                    current_event = tw_event_new(input_msg->sender, timestamp+2, lp);
                     new_message = tw_event_data(current_event);
                     new_message->type = FIGHT;
                     new_message->demands = DEFAULT_DEMAND_AMT;
@@ -88,7 +85,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     tw_event_send(current_event);
                     fprintf(stderr, "NOTE: LP %llu just retaliated war against LP %llu.\n", lp->gid, input_msg->sender);
                 } else {
-                    fight_field = 0;
+                    field1 = 0;
                     // Give the aggressor their demands in a make_peace message
                     if (s->resources >= input_msg->demands){
                         s->resources -= input_msg->demands;
@@ -112,8 +109,8 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     s->at_war_with = -1;    // Reset at_war_with to no-one (-1)
                 }
             }
-            else {    // We are already at war with another entity, so use a FORCE_PEACE as a way to let the second know we are already at war (simulation can't currently handle more than 1v1)
-                war_field = 1;      // Although we set this field, nothing needs to be reversed here
+            else {    // We are already at war with another entity, so use a FORCE_PEACE as a way to let the second know we are already at war (simulation cannot handle more than 1v1)
+                field0 = 1;      // Although we set this field, nothing needs to be reversed here
                 current_event = tw_event_new(input_msg->sender, timestamp + 1, lp);
                 new_message = tw_event_data(current_event);
                 new_message->type = FORCE_PEACE;
@@ -129,19 +126,19 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 s->health -= input_msg->damage; // Take damage from attack
                 // Now, based on current health and offensive capability compared to the enemy's, either surrender or fight back:
                 if ( (s->health-input_msg->damage) < HEALTH_LIM ){
-                    fight_field = 0;
+                    field1 = 0;
                     current_event = tw_event_new(input_msg->sender, timestamp + 1, lp);
                     new_message = tw_event_data(current_event);
                     new_message->type = SURRENDER;
                     new_message->sender = lp->gid;
                     // Pay as much of the demands as possible:
                     if (s->resources >= input_msg->demands){
-                        offer_field = 1;
+                        field2 = 1;
                         new_message->offering = input_msg->demands;
                         s->resources -= input_msg->demands;
                     }
                     else {
-                        offer_field = 0;
+                        field2 = 0;
                         input_msg->demands = s->resources;
                         new_message->offering = s->resources;
                         s->resources = 0;
@@ -152,7 +149,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 }
                 else {
                     // Fight Back
-                    fight_field = 1;
+                    field1 = 1;
                     current_event = tw_event_new(input_msg->sender, timestamp + 1, lp);
                     new_message = tw_event_data(current_event);
                     new_message->type = FIGHT;
@@ -175,28 +172,24 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             // Add resources proportional to the size of the entity
             s->resources += (int)(s->size*tw_rand_unif(lp->rng)*RESOURCERATE);
             // This also ensures that the LP will keep simulating by always having an ADD_RESOURCES event to respond to
-            // TODO: re-implement the reverse handler and necessary bit-field flags to fit this new event subhandler
             current_event = tw_event_new(lp->gid, timestamp + 3, lp);
             new_message = tw_event_data(current_event);
             new_message->type = ADD_RESOURCES;
             new_message->sender = lp->gid;
             tw_event_send(current_event);
-            /*rebuild_field = 0;
-             expand_field = 0;*/
             // Now we can do several of five things: scale up the arsenal, scale it down to recover resources,
             // rebuild (to regenerate health), declare war to get more resources if we aren't already
             // fighting, and expand our size/empire
             // All of these events will occur now, rather than being implemented as actual events to be
             // Received in the future
             if (s->health < HEALTH_LIM) {   // Our health is low, so begin repairs
-                //while (s->health < s->health_lim && s->resources > RESOURCE_LIM) {
+                while (s->health < s->health_lim && s->resources > RESOURCE_LIM) {
                     // TODO: maybe add a limit to how much one can rebuild in one 'turn'
                     s->health ++;
                     s->resources --;
-                //}
+                }
             }
-            if (s->at_war_with != -1) { // We are in a state of war, so arm up
-                // Arm up if we can
+            if (s->at_war_with != -1) { // We are in a state of war, so arm up if we can
                 input_msg->demands = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
                 s->offense += input_msg->demands;
                 s->resources -= input_msg->demands;
@@ -222,7 +215,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                         attack_gid++;
                     s->at_war_with = attack_gid;
                     // Generate and send the declaration
-                    current_event = tw_event_new(attack_gid, timestamp, lp);
+                    current_event = tw_event_new(attack_gid, timestamp + 2, lp);
                     new_message = tw_event_data(current_event);
                     new_message->type = DECLARE_WAR;
                     new_message->sender = lp->gid;
@@ -235,12 +228,9 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 }
             }
             else if (s->resources > (int)s->size/3){   // We have nothing else to do, so expand the empire
-                ///while (s->resources >= RESOURCE_LIM) {
-                    // TODO refine this system to something better than just incremeting/decrementing
                     s->resources -= (int)s->size/3;
                     s->size ++;
                     s->health_lim ++;
-                //}
             }
             break;
             
@@ -274,6 +264,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     }
 }
 
+// TODO: re-implement the reverse handler and necessary bit-field flags to fit this new event subhandler
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     switch (input_msg->type) {
         case DECLARE_WAR:
@@ -359,14 +350,13 @@ int myModel3_main(int argc, char *argv[]){
     tw_init(&argc, &argv);
     
     //reset mean based on lookahead
-    //mean = mean - lookahead;
+    mean = mean - lookahead;
     
     g_tw_memory_nqueues = 16; // give at least 16 memory queue event
     
     offset_lpid = g_tw_mynode * nlp_per_pe;
     ttl_lps = tw_nnodes() * g_tw_npe * nlp_per_pe;
-    //g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) + optimistic_memory;
-    //g_tw_rng_default = TW_FALSE;
+    g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) + optimistic_memory;
     
     if (g_tw_mynode == 0) {
         buffer = malloc(sizeof(final_stats) * nlp_per_pe);
@@ -429,17 +419,9 @@ int myModel3_main(int argc, char *argv[]){
 
     tw_run();
     
-    // The code in tw_end();
-    //if(tw_ismaster()) {
-    //    fprintf(g_tw_csv, "\n");
-    //    fclose(g_tw_csv);
-    //}
-    
-    
     if (g_tw_mynode != 0){
         // Use MPI_Send to relay the final stats to the 0 process:
         MPI_Send(global_stats, nlp_per_pe, mpi_final_stats, 0, g_tw_mynode, MPI_COMM_WORLD);
-        printf("Process %ld sent its data!\n", g_tw_mynode);
     }
     else {
         // Receive and store the data:
@@ -468,7 +450,6 @@ int myModel3_main(int argc, char *argv[]){
         }
     }
     MPI_Type_free(&mpi_final_stats);
-    //tw_net_stop();
     tw_end();
     
     return 0;
