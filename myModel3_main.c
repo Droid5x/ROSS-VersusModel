@@ -21,7 +21,7 @@
 #define DOWNSCALE_LIM 1
 #define UPSCALE_LIM (100 - HEALTH_LIM)//2 maybe replace this with something to do with the new LP-specific health maximum...
 #define DEFAULT_DEMAND_AMT 7
-#define NUMLPS 1
+#define NUMLPS 5
 #define DEBUG 1
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
@@ -34,7 +34,6 @@ void init(state *s, tw_lp *lp){
     unsigned int value = rand();
     unsigned int times[] = {value, value, value, value};
     // Initialize the state variables randomly
-    rng_set_seed(lp->rng, times);
     if (DEBUG) {
         s->health = 99;
         s->resources = 15;
@@ -44,6 +43,7 @@ void init(state *s, tw_lp *lp){
         s->health_lim = 100;
     }
     else {
+        rng_set_seed(lp->rng, times);
         s->health = tw_rand_integer(lp->rng, 15, 100);
         s->resources = tw_rand_integer(lp->rng, 20, 50);
         s->offense = tw_rand_integer(lp->rng, 1, 6);        // In order for the upper health limit to work
@@ -58,7 +58,7 @@ void init(state *s, tw_lp *lp){
     // Setup the first message (add/gather resources):
     // Send the message to be received immediately in the next tick
     timestamp = 1;
-    current_event = tw_event_new(lp->gid, timestamp, lp);
+    current_event = tw_event_new(lp->gid, tw_rand_integer(lp->rng, 1, 50), lp);
     new_message = tw_event_data(current_event);
     new_message->type = ADD_RESOURCES;
     new_message->sender = lp->gid;
@@ -71,7 +71,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     tw_event *current_event;
     tw_stime timestamp;
     message *new_message;
-    timestamp = tw_rand_exponential(lp->rng,20);
+    timestamp = tw_rand_exponential(lp->rng,200);
     // Sanity Checks and Error Messages:
     if (s->resources < 0) fprintf(stderr, "ERROR: LP %llu has negative resources!\n", lp->gid);
     if (s->offense < 0) {
@@ -88,7 +88,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 s->at_war_with = input_msg->sender; // Update at_war_with new combatant
                 if ( input_msg->damage < (s->health - HEALTH_LIM) ){    // Respond to the aggressor appropriately in a Fight message
                     field1 = 1;    // Record that we decided to fight
-                    current_event = tw_event_new(input_msg->sender, timestamp+2, lp);
+                    current_event = tw_event_new(input_msg->sender, timestamp + 1, lp);
                     new_message = tw_event_data(current_event);
                     new_message->type = FIGHT;
                     new_message->demands = DEFAULT_DEMAND_AMT;
@@ -183,7 +183,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             input_msg->offering = (int)(s->size * tw_rand_unif(lp->rng) * RESOURCERATE);
             s->resources += input_msg->offering;
             // This also ensures that the LP will keep simulating by always having an ADD_RESOURCES event to respond to
-            current_event = tw_event_new(lp->gid, timestamp + 3, lp);
+            current_event = tw_event_new(lp->gid, timestamp + 1, lp);
             new_message = tw_event_data(current_event);
             new_message->type = ADD_RESOURCES;
             new_message->sender = lp->gid;
@@ -242,7 +242,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                             attack_gid++;
                         s->at_war_with = attack_gid;
                         // Generate and send the declaration
-                        current_event = tw_event_new(attack_gid, timestamp + 2, lp);
+                        current_event = tw_event_new(attack_gid, timestamp + 1, lp);
                         new_message = tw_event_data(current_event);
                         new_message->type = DECLARE_WAR;
                         new_message->sender = lp->gid;
