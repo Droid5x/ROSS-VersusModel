@@ -67,7 +67,7 @@ void init(state *s, tw_lp *lp){
 }
 
 void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
-    int i;
+    int i, val;
     tw_lpid attack_gid;
     tw_event *current_event;
     tw_stime timestamp;
@@ -82,6 +82,13 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
         // Exit because this could have caused a divide by zero error.
         exit(EXIT_FAILURE);
     }
+    // Experimental code for safely saving variables in input_msg:
+    input_msg->rev_health = s->health;
+    input_msg->rev_health_lim = s->health_lim;
+    input_msg->rev_at_war_with = s->at_war_with;
+    input_msg->rev_resources = s->resources;
+    input_msg->rev_size = s->size;
+    input_msg->rev_offense = s->offense;
     // Onto Event Handling:
     switch (input_msg->type) {
         case DECLARE_WAR:               // We have just received a war declaration from someone.
@@ -116,7 +123,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                         new_message->type = SURRENDER;
                         new_message->sender = lp->gid;
                         new_message->offering = s->resources;
-                        input_msg->demands = s->resources;      // Revise demanded resources for reverse handler
+                        //input_msg->rev_resources = s->resources;// Store value for reverse handler
                         tw_event_send(current_event);
                         s->resources = 0;
                     }
@@ -152,7 +159,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                         s->resources -= input_msg->demands;
                     }
                     else {
-                        input_msg->demands = s->resources;
+                        //input_msg->rev_resources = s->resources;
                         new_message->offering = s->resources;
                         s->resources = 0;
                     }
@@ -183,8 +190,8 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
         case ADD_RESOURCES:
             // Note that casting to int will operate identically to math's floor function for positive numbers
             // Add resources proportional to the size of the entity
-            input_msg->offering = (int)(s->size * tw_rand_unif(lp->rng) * RESOURCERATE);
-            s->resources += input_msg->offering;
+            //input_msg->rev_resources = s->resources;
+            s->resources += (int)(s->size * tw_rand_unif(lp->rng) * RESOURCERATE);
             // This also ensures that the LP will keep simulating by always having an ADD_RESOURCES event to respond to
             current_event = tw_event_new(lp->gid, timestamp + 1, lp);
             new_message = tw_event_data(current_event);
@@ -203,19 +210,20 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             field4 = 0;
             if (s->health < HEALTH_LIM) {   // Our health is low, so begin repairs
                 field0 = 1;
-                input_msg->damage = 0;
+                //input_msg->damage = 0;
                 while (s->health < s->health_lim && s->resources > RESOURCE_LIM) {
                     // TODO: maybe add a limit to how much one can rebuild in one 'turn'
-                    input_msg->damage ++;
+                    //input_msg->damage ++;
                     s->health ++;
                     s->resources --;
                 }
             }
             if (s->at_war_with != -1) { // We are in a state of war, so arm up if we can
                 field1 = 1;
-                input_msg->demands = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
-                s->offense += input_msg->demands;
-                s->resources -= input_msg->demands;
+                val = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
+                //input_msg->demands = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
+                s->offense += val;//input_msg->demands;
+                s->resources -= val;//input_msg->demands;
             }
             else if ( (s->resources < RESOURCE_LIM || s->resources < (int)s->size/3) && s->offense > DOWNSCALE_LIM) {
                 field1 = 1;
@@ -224,14 +232,16 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 // Scale down and recover resources, or declare war to take someone else's
                 if (s->health < HEALTH_LIM) {   // Downscale
                     field3 = 1;
-                    input_msg->demands = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
-                    s->offense -= input_msg->demands;
-                    s->resources += input_msg->demands;
+                    //input_msg->demands
+                    val = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
+                    s->offense -= val;//input_msg->demands;
+                    s->resources += val;//input_msg->demands;
                     if (s->offense < 0) {   // Safety check here
                         // (note that the math means we won't need to reverse the
                         // three lines below in the reverse handler)
                         s->resources += s->offense;
-                        input_msg->demands += s->offense;
+                        //input_msg->demands
+                        val += s->offense;
                         s->offense = 0;
                     }
                 }
@@ -297,61 +307,68 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     reverse_flag = 1;
+    // Experimental code for safely saving variables in input_msg:
+    s->health = input_msg->rev_health;
+    s->health_lim = input_msg->rev_health_lim;
+    s->at_war_with = input_msg->rev_at_war_with;
+    s->resources = input_msg->rev_resources;
+    s->size = input_msg->rev_size;
+    s->offense = input_msg->rev_offense;
     switch (input_msg->type) {
         case FORCE_PEACE:
-            s->at_war_with = input_msg->sender;
+            //s->at_war_with = input_msg->sender;
             s->wars_started ++;
             break;
         case SURRENDER:
             s->times_won --;
-            s->resources -= input_msg->offering;
-            s->at_war_with = input_msg->sender;
+            //s->resources -= input_msg->offering;
+            //s->at_war_with = input_msg->sender;
             break;
         case ADD_RESOURCES:
             if (field1 && !field2) {
-                s->offense -= input_msg->demands;
-                s->resources += input_msg->demands;
+                //s->offense -= input_msg->demands;
+                //s->resources += input_msg->demands;
                 tw_rand_reverse_unif(lp->rng);
             }
             else if (field1 && field2) {
                 if (field3) {
-                    s->offense += input_msg->demands;
-                    s->resources -= input_msg->demands;
+                    //s->offense += input_msg->demands;
+                    //s->resources -= input_msg->demands;
                     tw_rand_reverse_unif(lp->rng);
                 }
                 else if (field4) {
-                    s->at_war_with = -1;
+                    //s->at_war_with = -1;
                     s->wars_started --;
                     tw_rand_reverse_unif(lp->rng);
                 }
             }
             else if (!field1 && field2) {
-                s->health_lim --;
-                s->size --;
-                s->resources += (int)s->size/3;
+                //s->health_lim --;
+                //s->size --;
+                //s->resources += (int)s->size/3;
             }
             if (field0) {
-                s->health -= input_msg->damage;
-                s->resources += input_msg->damage;
+                //s->health -= input_msg->damage;
+                //s->resources += input_msg->damage;
             }
-            s->resources -= input_msg->offering;
+            //s->resources -= input_msg->offering;
             tw_rand_reverse_unif(lp->rng);
             break;
         case FIGHT:
             if (!field1) {
-                s->resources += input_msg->demands;
-                s->at_war_with = input_msg->sender;
+                //s->resources += input_msg->demands;
+                //s->at_war_with = input_msg->sender;
                 s->times_defeated --;
             }
-            s->health += input_msg->damage;
+            //s->health += input_msg->damage;
             break;
         case DECLARE_WAR:
             if (!field0) {
                 if (!field1) {
-                    s->resources += input_msg->demands;
+                    //s->resources += input_msg->demands;
                     s->times_defeated --;
                 }
-                s->at_war_with = -1;
+                //s->at_war_with = -1;
             }
             break;
         default:
