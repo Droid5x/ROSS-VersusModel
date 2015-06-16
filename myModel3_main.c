@@ -129,7 +129,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 new_message->sender = lp->gid;
                 new_message->offering = 0;      // Since we are really just denying the declaration, don't give anything.
                 tw_event_send(current_event);
-                fprintf(stderr, "WARNING: LP %llu declared war on LP %llu already occupied by LP %d\n", input_msg->sender, lp->gid, s->at_war_with);
+                fprintf(stderr, "WARNING: LP %llu declared war on LP %llu already occupied by LP %ld\n", input_msg->sender, lp->gid, s->at_war_with);
             }
             break;
             
@@ -172,7 +172,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             else {
                 fprintf(stderr, "ERROR: LP %llu says someone we weren't fighting tried to fight without a declaration.\n",lp->gid);
                 fprintf(stderr, "ERROR: \"enemy\" gid: %llu\n",input_msg->sender);
-                fprintf(stderr, "ERROR: our at_war_with: %d \n", s->at_war_with);
+                fprintf(stderr, "ERROR: our at_war_with: %ld \n", s->at_war_with);
                 exit(EXIT_FAILURE);
             }
             break;
@@ -266,7 +266,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             if (input_msg->sender == s->at_war_with && s->at_war_with != -1){
                 // Note: we don't need to set any bitfield values since the else statement is irreversible (EXIT_FAILURE).
                 // Accept the offering and reset at_war_with to -1
-                fprintf(stderr, "NOTE: LP %d just made peace with LP %llu.\n", s->at_war_with, lp->gid);
+                fprintf(stderr, "NOTE: LP %ld just made peace with LP %llu.\n", s->at_war_with, lp->gid);
                 s->at_war_with = -1;
                 s->resources += input_msg->offering;
                 s->times_won ++;
@@ -274,13 +274,13 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             else {
                 fprintf(stderr, "ERROR: LP %llu says: Someone we weren't fighting with asked to make peace.\n", lp->gid);
                 fprintf(stderr, "ERROR: \"enemy\" gid: %llu\n",input_msg->sender);
-                fprintf(stderr, "ERROR: our at_war_with: %d \n", s->at_war_with);
+                fprintf(stderr, "ERROR: our at_war_with: %ld \n", s->at_war_with);
                 exit(EXIT_FAILURE);
             }
             break;
             
         case FORCE_PEACE:
-            fprintf(stderr, "RESOLUTION: LP %llu backing off from attacking LP %llu. Before reset, at_war_with = %d.\n", lp->gid, input_msg->sender, s->at_war_with);
+            fprintf(stderr, "RESOLUTION: LP %llu backing off from attacking LP %llu. Before reset, at_war_with = %ld.\n", lp->gid, input_msg->sender, s->at_war_with);
             s->at_war_with = -1;
             s->wars_started --;
             break;
@@ -293,7 +293,6 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 }
 
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
-    printf("Hello World!\n");
     switch (input_msg->type) {
         case FORCE_PEACE:
             s->at_war_with = input_msg->sender;
@@ -430,7 +429,7 @@ int myModel3_main(int argc, char *argv[]){
     
     //offset_lpid = g_tw_mynode * nlp_per_pe;
     ttl_lps = tw_nnodes() * g_tw_npe * nlp_per_pe;
-    g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) + optimistic_memory;
+    g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) ;//+ optimistic_memory;
     
     if (g_tw_mynode == 0) {
         buffer = malloc(sizeof(final_stats) * nlp_per_pe);
@@ -468,13 +467,15 @@ int myModel3_main(int argc, char *argv[]){
     // Make the final_stats struct into an equivalent MPI version:
     const int num_items = 9;      // There are 9 items in the final_stats struct (all ints)
     int blocklengths[9] = {1,1,1,1,1,1,1,1,1};
+    
     MPI_Datatype types[9] = {
-        MPI_INT, MPI_INT,
-        MPI_INT, MPI_INT,
-        MPI_INT, MPI_INT,
-        MPI_INT, MPI_INT,
-        MPI_INT
+        MPI_LONG_INT, MPI_LONG_INT,
+        MPI_LONG_INT, MPI_LONG_INT,
+        MPI_LONG_INT, MPI_LONG_INT,
+        MPI_LONG_INT, MPI_LONG_INT,
+        MPI_LONG_INT
     };
+    
     MPI_Datatype mpi_final_stats;
     MPI_Aint offsets[9] = {
         offsetof(final_stats, health),
@@ -510,34 +511,34 @@ int myModel3_main(int argc, char *argv[]){
                 // Print all the LP's final state values here. (this is called for each LP)
                 printf("\n\n====================================\n");
                 printf("LP %d stats:\n", i);
-                printf("Health:\t\t%d/%u (SHOULD BE 99/100)\n", global_stats[i].health, global_stats[i].health_lim);
-                printf("Resources:\t%d (SHOULD BE 15)\n",global_stats[i].resources);
-                printf("Offense:\t%d (SHOULD BE 2)\n", global_stats[i].offense);
-                printf("Size:\t\t%d (SHOULD BE 5)\n", global_stats[i].size);
+                printf("Health:\t\t%ld/%ld (SHOULD BE 99/100)\n", global_stats[i].health, global_stats[i].health_lim);
+                printf("Resources:\t%ld (SHOULD BE 15)\n",global_stats[i].resources);
+                printf("Offense:\t%ld (SHOULD BE 2)\n", global_stats[i].offense);
+                printf("Size:\t\t%ld (SHOULD BE 5)\n", global_stats[i].size);
                 if (global_stats[i].at_war_with > -1)
-                    printf("At war with LP %d.\n", global_stats[i].at_war_with);
+                    printf("At war with LP %ld.\n", global_stats[i].at_war_with);
                 else
                     printf("Not at war with any LP.\n");
-                printf("Wars won:\t%u\n", global_stats[i].times_won);
-                printf("Wars lost:\t%u\n", global_stats[i].times_defeated);
-                printf("Wars started:\t%u\n", global_stats[i].wars_started);
+                printf("Wars won:\t%ld\n", global_stats[i].times_won);
+                printf("Wars lost:\t%ld\n", global_stats[i].times_defeated);
+                printf("Wars started:\t%ld\n", global_stats[i].wars_started);
                 printf("====================================\n\n");
             }
             else {
                 // Print all the LP's final state values here. (this is called for each LP)
                 printf("\n\n====================================\n");
                 printf("LP %d stats:\n", i);
-                printf("Health:\t\t%d/%u\n", global_stats[i].health, global_stats[i].health_lim);
-                printf("Resources:\t%d\n",global_stats[i].resources);
-                printf("Offense:\t%d\n", global_stats[i].offense);
-                printf("Size:\t\t%d\n", global_stats[i].size);
+                printf("Health:\t\t%ld/%ld\n", global_stats[i].health, global_stats[i].health_lim);
+                printf("Resources:\t%ld\n",global_stats[i].resources);
+                printf("Offense:\t%ld\n", global_stats[i].offense);
+                printf("Size:\t\t%ld\n", global_stats[i].size);
                 if (global_stats[i].at_war_with > -1)
-                    printf("At war with LP %d.\n", global_stats[i].at_war_with);
+                    printf("At war with LP %ld.\n", global_stats[i].at_war_with);
                 else
                     printf("Not at war with any LP.\n");
-                printf("Wars won:\t%u\n", global_stats[i].times_won);
-                printf("Wars lost:\t%u\n", global_stats[i].times_defeated);
-                printf("Wars started:\t%u\n", global_stats[i].wars_started);
+                printf("Wars won:\t%ld\n", global_stats[i].times_won);
+                printf("Wars lost:\t%ld\n", global_stats[i].times_defeated);
+                printf("Wars started:\t%ld\n", global_stats[i].wars_started);
                 printf("====================================\n\n");
             }
         }

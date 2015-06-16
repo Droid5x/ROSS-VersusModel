@@ -46,10 +46,10 @@ typedef struct {
     long int offense;
     long int size;
     long int at_war_with; // gid of the other entity (-1 if not at war)
-    long unsigned int health_lim;    // Upper health limit (NOT TO BE CONFUSED WITH SIMILARLY NAMED LOWER HEALTH LIMIT DEFINED IN THE .c FILE.
-    long unsigned int times_defeated;
-    long unsigned int times_won;
-    long unsigned int wars_started;
+    unsigned long health_lim;    // Upper health limit (NOT TO BE CONFUSED WITH SIMILARLY NAMED LOWER HEALTH LIMIT DEFINED IN THE .c FILE.
+    unsigned long times_defeated;
+    unsigned long times_won;
+    unsigned long wars_started;
     
 } state;
 
