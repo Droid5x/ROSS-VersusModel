@@ -36,7 +36,8 @@ void init(state *s, tw_lp *lp){
     rng_set_seed(lp->rng, times);
     s->health = tw_rand_integer(lp->rng, 15, 100);
     s->resources = tw_rand_integer(lp->rng, 20, 50);
-    s->offense = tw_rand_integer(lp->rng, 1, 6);        // In order for the upper health limit to work, we need to avoid divide by zero errors.
+    s->offense = tw_rand_integer(lp->rng, 1, 6);        // In order for the upper health limit to work
+                                                        // we need to avoid divide by zero errors and generate numbers only from 1 to some upper bound.
     s->size = tw_rand_integer(lp->rng, 20, 36);
     s->at_war_with = -1;
     s->health_lim = (int)(s->size/s->offense);
@@ -44,8 +45,8 @@ void init(state *s, tw_lp *lp){
     s->times_won = 0;
     s->wars_started = 0;
     // Setup the first message (add/gather resources):
-    // Send the message to be received immediately
-    timestamp = 1;//tw_rand_exponential(lp->rng, 30);
+    // Send the message to be received immediately in the next tick
+    timestamp = 1;
     current_event = tw_event_new(lp->gid, timestamp, lp);
     new_message = tw_event_data(current_event);
     new_message->type = ADD_RESOURCES;
@@ -182,27 +183,41 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             // fighting, and expand our size/empire
             // All of these events will occur now, rather than being implemented as actual events to be
             // Received in the future
+            field0 = 0;
+            field1 = 0;
+            field2 = 0;
+            field3 = 0;
+            field4 = 0;
             if (s->health < HEALTH_LIM) {   // Our health is low, so begin repairs
+                field0 = 1;
+                input_msg->damage = 0;
                 while (s->health < s->health_lim && s->resources > RESOURCE_LIM) {
                     // TODO: maybe add a limit to how much one can rebuild in one 'turn'
+                    input_msg->damage ++;
                     s->health ++;
                     s->resources --;
                 }
             }
             if (s->at_war_with != -1) { // We are in a state of war, so arm up if we can
+                field1 = 1;
                 input_msg->demands = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
                 s->offense += input_msg->demands;
                 s->resources -= input_msg->demands;
             }
             else if ( (s->resources < RESOURCE_LIM || s->resources < (int)s->size/3) && s->offense > DOWNSCALE_LIM) {
+                field1 = 1;
+                field2 = 1;
                 // If we don't have enough resources, we have two choices aside from waiting:
                 // Scale down and recover resources, or declare war to take someone else's
                 if (s->health < HEALTH_LIM) {   // Downscale
+                    field3 = 1;
                     input_msg->demands = (int)(tw_rand_unif(lp->rng) * SCALE_AMT);
                     s->offense -= input_msg->demands;
                     s->resources += input_msg->demands;
                     if (s->offense < 0) {   // Safety check here
-                        s->resources -= s->offense;
+                        // (note that the math means we won't need to reverse the
+                        // three lines below in the reverse handler)
+                        s->resources += s->offense;
                         input_msg->demands += s->offense;
                         s->offense = 0;
                     }
@@ -219,7 +234,6 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                     new_message = tw_event_data(current_event);
                     new_message->type = DECLARE_WAR;
                     new_message->sender = lp->gid;
-                    // TODO: design a more stochastic method of generating the demand amt!
                     new_message->demands = DEFAULT_DEMAND_AMT;
                     new_message->damage = s->offense;
                     tw_event_send(current_event);
@@ -228,6 +242,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 }
             }
             else if (s->resources > (int)s->size/3){   // We have nothing else to do, so expand the empire
+                field2 = 1;
                     s->resources -= (int)s->size/3;
                     s->size ++;
                     s->health_lim ++;
@@ -264,18 +279,59 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     }
 }
 
-// TODO: re-implement the reverse handler and necessary bit-field flags to fit this new event subhandler
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     switch (input_msg->type) {
         case DECLARE_WAR:
-            break;
-        case FORCE_PEACE:
-            break;
-        case SURRENDER:
+            if (!field0 && !field1) {
+                s->resources += input_msg->demands;
+                s->times_defeated --;
+                // No need to change at_war_with because we've undone the entire war declaration, which is the event that sets at_war_with to a valid id.
+            }
             break;
         case FIGHT:
+            s->health += input_msg->damage;
+            if (!field1) {
+                s->resources += input_msg->demands;
+                s->at_war_with = input_msg->sender;
+                s->times_defeated --;
+            }
             break;
         case ADD_RESOURCES:
+            tw_rand_reverse_unif(lp->rng);  // Reverse once to recover the old value
+            s->resources -= (int)(s->size * tw_rand_reverse_unif(lp->rng) * RESOURCERATE);
+            tw_rand_reverse_unif(lp->rng);  // Reverse again to undo it
+            if (field0) {
+                s->health -= input_msg->damage;
+                s->resources += input_msg->damage;
+            }
+            if (field1 && !field2) {
+                s->offense -= input_msg->demands;
+                s->resources += input_msg->demands;
+            }
+            else if (field1 && field2) {
+                if (field3) {
+                    s->offense += input_msg->demands;
+                    s->resources -= input_msg->demands;
+                }
+                else {
+                    s->at_war_with = -1;
+                    s->wars_started --;
+                }
+            }
+            else if (!field1 && field2) {
+                s->health_lim --;
+                s->size --;
+                s->resources += (int)s->size/3;
+            }
+            break;
+        case SURRENDER:
+            s->times_won --;
+            s->resources -= input_msg->offering;
+            s->at_war_with = input_msg->sender;
+            break;
+        case FORCE_PEACE:
+            s->at_war_with = input_msg->sender;
+            s->wars_started ++;
             break;
         default:
             break;
