@@ -71,7 +71,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     tw_event *current_event;
     tw_stime timestamp;
     message *new_message;
-    timestamp = tw_rand_exponential(lp->rng,400);
+    timestamp = tw_rand_exponential(lp->rng,20);
     // Sanity Checks and Error Messages:
     if (s->resources < 0) fprintf(stderr, "ERROR: LP %llu has negative resources!\n", lp->gid);
     if (s->offense < 0) {
@@ -83,7 +83,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     switch (input_msg->type) {
         case DECLARE_WAR:               // We have just received a war declaration from someone.
             if (s->at_war_with == -1){  // We aren't at war yet with anyone else
-                field0 = 0;          // Set the bit field to record this for the reverse handler
+                field0 = 0;             // Record this for the reverse handler
                 fprintf(stderr, "NOTE: LP %llu just declared war on LP %llu.\n", input_msg->sender, lp->gid);
                 s->at_war_with = input_msg->sender; // Update at_war_with new combatant
                 if ( input_msg->damage < (s->health - HEALTH_LIM) ){    // Respond to the aggressor appropriately in a Fight message
@@ -113,7 +113,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                         new_message->type = SURRENDER;
                         new_message->sender = lp->gid;
                         new_message->offering = s->resources;
-                        input_msg->demands = s->resources;      // Revise demanded resources for reverse handler (Note, makes use of bitfield unecessary.)
+                        input_msg->demands = s->resources;      // Revise demanded resources for reverse handler
                         tw_event_send(current_event);
                         s->resources = 0;
                     }
@@ -180,7 +180,8 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
         case ADD_RESOURCES:
             // Note that casting to int will operate identically to math's floor function for positive numbers
             // Add resources proportional to the size of the entity
-            s->resources += (int)(s->size * tw_rand_unif(lp->rng) * RESOURCERATE);
+            input_msg->offering = (int)(s->size * tw_rand_unif(lp->rng) * RESOURCERATE);
+            s->resources += input_msg->offering;
             // This also ensures that the LP will keep simulating by always having an ADD_RESOURCES event to respond to
             current_event = tw_event_new(lp->gid, timestamp + 3, lp);
             new_message = tw_event_data(current_event);
@@ -293,28 +294,16 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     switch (input_msg->type) {
-        case DECLARE_WAR:
-            if (!field0) {
-                s->at_war_with = -1;
-                if (!field1) {
-                    s->resources += input_msg->demands;
-                    s->times_defeated --;
-                }
-            }
+        case FORCE_PEACE:
+            s->at_war_with = input_msg->sender;
+            s->wars_started ++;
             break;
-        case FIGHT:
-            s->health += input_msg->damage;
-            if (!field1) {
-                s->resources += input_msg->demands;
-                s->at_war_with = input_msg->sender;
-                s->times_defeated --;
-            }
+        case SURRENDER:
+            s->times_won --;
+            s->resources -= input_msg->offering;
+            s->at_war_with = input_msg->sender;
             break;
         case ADD_RESOURCES:
-            if (field0) {
-                s->health -= input_msg->damage;
-                s->resources += input_msg->damage;
-            }
             if (field1 && !field2) {
                 s->offense -= input_msg->demands;
                 s->resources += input_msg->demands;
@@ -337,23 +326,34 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 s->size --;
                 s->resources += (int)s->size/3;
             }
-            tw_rand_reverse_unif(lp->rng);  // Reverse once to recover the old value
-            s->resources -= (int)(s->size * tw_rand_unif(lp->rng) * RESOURCERATE);
-            tw_rand_reverse_unif(lp->rng);  // Reverse again to undo it
-            break;
-        case SURRENDER:
-            s->times_won --;
+            if (field0) {
+                s->health -= input_msg->damage;
+                s->resources += input_msg->damage;
+            }
             s->resources -= input_msg->offering;
-            s->at_war_with = input_msg->sender;
+            tw_rand_reverse_unif(lp->rng);
             break;
-        case FORCE_PEACE:
-            s->at_war_with = input_msg->sender;
-            s->wars_started ++;
+        case FIGHT:
+            if (!field1) {
+                s->resources += input_msg->demands;
+                s->at_war_with = input_msg->sender;
+                s->times_defeated --;
+            }
+            s->health += input_msg->damage;
+            break;
+        case DECLARE_WAR:
+            if (!field0) {
+                if (!field1) {
+                    s->resources += input_msg->demands;
+                    s->times_defeated --;
+                }
+                s->at_war_with = -1;
+            }
             break;
         default:
             break;
-        tw_rand_reverse_unif(lp->rng);
     }
+    tw_rand_reverse_unif(lp->rng);
     
 }
 
