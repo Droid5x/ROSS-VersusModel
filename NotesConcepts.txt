@@ -1,6 +1,3 @@
-Author: Mark Blanco
-June 2015
-
 Notes & Concepts for Versus Model:
 Concept: to avoid ordering conflicts for self events, replace all self events with code that will run every time and event is received. Or Retain only resource add events, which then run the code to do self maintenance (rebuild, scaleup/scaledown, expand, and declare war.) Doing this may make the reverse event handler much more complicated though.
 -- Somewhat implemented by making timings for self-events stricter
@@ -17,12 +14,3 @@ Add Stat tracking to keep track of LP number of times surrendered, battles won, 
 
 TODO: Update the reverse event handler to match changes in the main handler
 --DONE
-
-6/12/15:
-TODO: Cull as many internal LP events as possible and incorportate them into ADD_RESOURCES. External events should stay but be refined, probably.
--- DONE
-
-6/15/15
-TODO: Update the reverse event handler to match changes in the main handler...in time.
-
-TODO: Fix LP-Stat printouts, since they seem to interrupt each other and overlap. Implement by using MPI send/recieve calls to transfer the final data back and forth.

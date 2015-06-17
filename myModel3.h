@@ -12,21 +12,49 @@
 #include <stdio.h>
 #include "ross.h"
 // defines to more easily handle the bit field locations:
-#define field0 bf->c0
-#define field1 bf->c1
-#define field2 bf->c2
-#define field3 bf->c3
-#define field4 bf->c4
-#define field5 bf->c5
+#define war_field bf->c0
+#define fight_field bf->c1
+#define offer_field bf->c2
+#define attack_field bf->c3
+#define rebuild_field bf->c4
+#define expand_field bf->c5
+#define field6 bf->c6
+#define field7 bf->c7
+#define field8 bf->c8
+#define field9 bf->c9
+#define field10 bf->c10
+#define field11 bf->c11
+#define field12 bf->c12
+#define field13 bf->c13
+#define field14 bf->c14
+#define field15 bf->c15
+#define field16 bf->c16
+#define field17 bf->c17
+#define field18 bf->c18
+#define field19 bf->c19
+#define field20 bf->c20
+#define field21 bf->c21
+#define field22 bf->c22
+#define field23 bf->c23
+#define field24 bf->c24
+#define field25 bf->c25
+#define field26 bf->c26
+#define field27 bf->c27
+#define field28 bf->c28
+#define field29 bf->c29
+#define field30 bf->c30
+#define field31 bf->c31
 
 // Define message types here
 typedef enum {
     DECLARE_WAR,
-    FORCE_PEACE,    // This event only exists because LPs can otherwise declare war
-                    // on already occupied LPs
-    CANCEL_WAR,
-    SURRENDER,
+    FORCE_PEACE,
+    PROPOSE_PEACE,
+    SCALE_UP,
+    SCALE_DOWN,
     FIGHT,       //(Note that the defender always gets the first strike)
+    REBUILD,
+    EXPAND,
     ADD_RESOURCES
 } message_type;
 
@@ -34,50 +62,37 @@ typedef enum {
 typedef struct {
     message_type type;
     tw_lpid sender;
-    long int damage;     // The damage caused by the sender
-    long int demands;    // Amt resources demanded by the sender or amt scale_up demanded of self.
-    long int offering;   // Amt resources given by the sender
+    int damage;     // The damage caused by the sender
+    int demands;    // Amt resources demanded by the sender or amt scale_up demanded of self.
+    int offering;   // Amt resources given by the sender
     // Maybe add other things here...
 } message;
 
 typedef struct {
     // Add state variables here for the LPs
-    long int health;
-    long int resources;
-    long int offense;
-    long int size;
-    long int at_war_with; // gid of the other entity (-1 if not at war)
-    unsigned long health_lim;    // Upper health limit (NOT TO BE CONFUSED WITH SIMILARLY NAMED LOWER HEALTH LIMIT DEFINED IN THE .c FILE.
-    unsigned long times_defeated;
-    unsigned long times_won;
-    unsigned long wars_started;
+    int health;
+    int resources;
+    int offense;
+    int size;
+    int at_war_with; // gid of the other entity (-1 if not at war)
+    unsigned int health_lim;    // Upper health limit (NOT TO BE CONFUSED WITH SIMILARLY NAMED LOWER HEALTH LIMIT DEFINED IN THE .c FILE.
+    unsigned int times_defeated;
+    unsigned int times_won;
+    unsigned int wars_started;
     
 } state;
-
-
-typedef struct {
-    long int health;
-    long int health_lim;
-    long int resources;
-    long int offense;
-    long int size;
-    long int at_war_with;
-    long int times_won;
-    long int times_defeated;
-    long int wars_started;
-} final_stats;
 
 /*
  * VERSUS Globals
  */
-// NOTE: The following was copied from the phold model and adapted
+// NOTE: Lines 52-65 were copied from the phold model and adapted
 tw_stime lookahead = 1.0;
 static unsigned int stagger = 0;
 static unsigned int offset_lpid = 0;
 static tw_stime mult = 1.4;
 static tw_stime percent_remote = 0.25;
 static unsigned int ttl_lps = 0;
-int nlp_per_pe = -1; // This gets reset by #define in .c file.
+static unsigned int nlp_per_pe = -1; // This gets reset by #define in .c file.
 static int g_phold_start_events = 1;
 static int optimistic_memory = 1000;
 
