@@ -36,7 +36,13 @@ typedef struct {
     long int damage;     // The damage caused by the sender
     long int demands;    // Amt resources demanded by the sender or amt scale_up demanded of self.
     long int offering;   // Amt resources given by the sender
-    // Maybe add other things here...
+    // Dummy values for reverse handling:
+    long int rev_health;
+    long int rev_resources;
+    long int rev_offense;
+    long int rev_size;
+    long int rev_at_war_with;
+    unsigned long rev_health_lim;
 } message;
 
 typedef struct {
@@ -52,7 +58,6 @@ typedef struct {
     unsigned long wars_started;
     
 } state;
-
 
 typedef struct {
     long int health;
