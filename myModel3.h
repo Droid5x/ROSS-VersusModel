@@ -60,15 +60,15 @@ typedef struct {
 } state;
 
 typedef struct {
-    long int health;
-    long int health_lim;
-    long int resources;
-    long int offense;
-    long int size;
-    long int at_war_with;
-    long int times_won;
-    long int times_defeated;
-    long int wars_started;
+    long long int health;
+    long long int health_lim;
+    long long int resources;
+    long long int offense;
+    long long int size;
+    long long int at_war_with;
+    long long int times_won;
+    long long int times_defeated;
+    long long int wars_started;
 } final_stats;
 
 /*

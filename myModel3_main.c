@@ -26,6 +26,7 @@
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
 char reverse_flag = 0;
+char final_stats_flag = 0;
 
 // Initialize LPs (called by ROSS):
 void init(state *s, tw_lp *lp){
@@ -398,6 +399,7 @@ void model_final_stats(state *s, tw_lp *lp){
     global_stats[index].times_won = s->times_won;
     global_stats[index].times_defeated = s->times_defeated;
     global_stats[index].wars_started = s->wars_started;
+    final_stats_flag = 1;   // Set the flag to signifiy that we've been here
 }
 
 // Return the PE or node id given a gid
@@ -520,7 +522,7 @@ int myModel3_main(int argc, char *argv[]){
     // Done creating mpi type
 
     tw_run();
-    
+
     if (g_tw_mynode != 0){
         // Use MPI_Send to relay the final stats to the 0 process:
         MPI_Send(global_stats, nlp_per_pe, mpi_final_stats, 0, g_tw_mynode, MPI_COMM_WORLD);
@@ -538,41 +540,47 @@ int myModel3_main(int argc, char *argv[]){
                 // Print all the LP's final state values here. (this is called for each LP)
                 printf("\n\n====================================\n");
                 printf("LP %d stats:\n", i);
-                printf("Health:\t\t%ld/%ld (SHOULD BE 99/100)\n", global_stats[i].health, global_stats[i].health_lim);
-                printf("Resources:\t%ld (SHOULD BE 15)\n",global_stats[i].resources);
-                printf("Offense:\t%ld (SHOULD BE 2)\n", global_stats[i].offense);
-                printf("Size:\t\t%ld (SHOULD BE 5)\n", global_stats[i].size);
+                printf("Health:\t\t%lld/%lld (SHOULD BE 99/100)\n", global_stats[i].health, global_stats[i].health_lim);
+                printf("Resources:\t%lld (SHOULD BE 15)\n",global_stats[i].resources);
+                printf("Offense:\t%lld (SHOULD BE 2)\n", global_stats[i].offense);
+                printf("Size:\t\t%lld (SHOULD BE 5)\n", global_stats[i].size);
                 if (global_stats[i].at_war_with > -1)
-                    printf("At war with LP %ld.\n", global_stats[i].at_war_with);
+                    printf("At war with LP %lld.\n", global_stats[i].at_war_with);
                 else
                     printf("Not at war with any LP.\n");
-                printf("Wars won:\t%ld\n", global_stats[i].times_won);
-                printf("Wars lost:\t%ld\n", global_stats[i].times_defeated);
-                printf("Wars started:\t%ld\n", global_stats[i].wars_started);
+                printf("Wars won:\t%lld\n", global_stats[i].times_won);
+                printf("Wars lost:\t%lld\n", global_stats[i].times_defeated);
+                printf("Wars started:\t%lld\n", global_stats[i].wars_started);
                 printf("====================================\n\n");
             }
             else {
                 // Print all the LP's final state values here. (this is called for each LP)
                 printf("\n\n====================================\n");
                 printf("LP %d stats:\n", i);
-                printf("Health:\t\t%ld/%ld\n", global_stats[i].health, global_stats[i].health_lim);
-                printf("Resources:\t%ld\n",global_stats[i].resources);
-                printf("Offense:\t%ld\n", global_stats[i].offense);
-                printf("Size:\t\t%ld\n", global_stats[i].size);
+                printf("Health:\t\t%lld/%lld\n", global_stats[i].health, global_stats[i].health_lim);
+                printf("Resources:\t%lld\n",global_stats[i].resources);
+                printf("Offense:\t%lld\n", global_stats[i].offense);
+                printf("Size:\t\t%lld\n", global_stats[i].size);
                 if (global_stats[i].at_war_with > -1)
-                    printf("At war with LP %ld.\n", global_stats[i].at_war_with);
+                    printf("At war with LP %lld.\n", global_stats[i].at_war_with);
                 else
                     printf("Not at war with any LP.\n");
-                printf("Wars won:\t%ld\n", global_stats[i].times_won);
-                printf("Wars lost:\t%ld\n", global_stats[i].times_defeated);
-                printf("Wars started:\t%ld\n", global_stats[i].wars_started);
+                printf("Wars won:\t%lld\n", global_stats[i].times_won);
+                printf("Wars lost:\t%lld\n", global_stats[i].times_defeated);
+                printf("Wars started:\t%lld\n", global_stats[i].wars_started);
                 printf("====================================\n\n");
             }
         }
     }
-    
-    if (reverse_flag && DEBUG){
+    if (DEBUG){
+    if (reverse_flag)
         printf("The reverse event handler was called at least once.\n");
+    else
+        printf("WARNING: THE REVERSE EVENT HANDLER WAS NEVER CALLED.\n");
+    if (final_stats_flag && DEBUG)
+        printf("The final statistics collection function was called at least once.\n");
+    else
+        printf("WARNING: THE FINAL STATISTICS COLLECTION FUNCTION WAS NEVER CALLED.\n");
     }
     MPI_Type_free(&mpi_final_stats);
     
