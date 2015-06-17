@@ -24,6 +24,7 @@ typedef enum {
     DECLARE_WAR,
     FORCE_PEACE,    // This event only exists because LPs can otherwise declare war
                     // on already occupied LPs
+    CANCEL_WAR,
     SURRENDER,
     FIGHT,       //(Note that the defender always gets the first strike)
     ADD_RESOURCES

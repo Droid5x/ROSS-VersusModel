@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stddef.h>
+#include <assert.h>
 
 #define RESOURCERATE 0.16
 #define SCALE_AMT 20
@@ -176,7 +177,13 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 fprintf(stderr, "ERROR: LP %llu says someone we weren't fighting tried to fight without a declaration.\n",lp->gid);
                 fprintf(stderr, "ERROR: \"enemy\" gid: %llu\n",input_msg->sender);
                 fprintf(stderr, "ERROR: our at_war_with: %ld \n", s->at_war_with);
-                exit(EXIT_FAILURE);
+                fprintf(stderr, "SENDING CANCEL WAR MESSAGE\n");
+                current_event = tw_event_new(input_msg->sender, timestamp + 1, lp);
+                new_message = tw_event_data(current_event);
+                new_message->type = CANCEL_WAR;
+                new_message->sender = lp->gid;
+                new_message->offering = input_msg->offering;
+                tw_event_send(current_event);
             }
             break;
             
@@ -278,7 +285,13 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 fprintf(stderr, "ERROR: LP %llu says: Someone we weren't fighting with asked to make peace.\n", lp->gid);
                 fprintf(stderr, "ERROR: \"enemy\" gid: %llu\n",input_msg->sender);
                 fprintf(stderr, "ERROR: our at_war_with: %ld \n", s->at_war_with);
-                exit(EXIT_FAILURE);
+                fprintf(stderr, "SENDING CANCEL WAR MESSAGE\n");
+                current_event = tw_event_new(input_msg->sender, timestamp + 1, lp);
+                new_message = tw_event_data(current_event);
+                new_message->type = CANCEL_WAR;
+                new_message->sender = lp->gid;
+                new_message->offering = input_msg->offering;
+                tw_event_send(current_event);
             }
             break;
             
@@ -287,7 +300,13 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             s->at_war_with = -1;
             s->wars_started --;
             break;
-            
+        case CANCEL_WAR:
+            s->at_war_with = -1;
+            if (input_msg->offering){
+                s->resources += input_msg->offering;
+                s->times_defeated --;
+            }
+            break;
         default:
             fprintf(stderr, "ERROR: Unidentified forward message!\n");
             exit(EXIT_FAILURE);
@@ -298,6 +317,13 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     reverse_flag = 1;
     switch (input_msg->type) {
+        case CANCEL_WAR:
+            s->at_war_with = input_msg->sender;
+            if (input_msg->offering){
+                s->resources -= input_msg->offering;
+                s->times_defeated ++;
+            }
+            break;
         case FORCE_PEACE:
             s->at_war_with = input_msg->sender;
             s->wars_started ++;
@@ -364,6 +390,7 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
 // Place all of the LP stats in this rank's data struct array
 void model_final_stats(state *s, tw_lp *lp){
     int index = (int)lp->gid % g_tw_nlp;
+    assert(index >= 0 && index < NUMLPS);
     global_stats[index].health = s->health;
     global_stats[index].health_lim = s->health_lim;
     global_stats[index].resources = s->resources;
@@ -431,15 +458,15 @@ int myModel3_main(int argc, char *argv[]){
     
     //offset_lpid = g_tw_mynode * nlp_per_pe;
     ttl_lps = tw_nnodes() * g_tw_npe * nlp_per_pe;
-    g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) ;//+ optimistic_memory;
+    g_tw_events_per_pe = (mult * nlp_per_pe * g_phold_start_events) + optimistic_memory;
     
     if (g_tw_mynode == 0) {
-        buffer = malloc(sizeof(final_stats) * nlp_per_pe);
+        buffer = malloc(sizeof(final_stats) * nlp_per_pe * 2);
         // Define the actual size of the global stats array
-        global_stats = malloc(sizeof(final_stats) * ttl_lps);
+        global_stats = malloc(sizeof(final_stats) * ttl_lps * 2);
     }
     else {
-        global_stats = malloc(sizeof(final_stats) * nlp_per_pe);
+        global_stats = malloc(sizeof(final_stats) * nlp_per_pe * 2);
     }
     // Done with prep for final stats array
     
@@ -549,8 +576,9 @@ int myModel3_main(int argc, char *argv[]){
     if (reverse_flag && DEBUG){
         printf("The reverse event handler was called at least once.\n");
     }
-    MPI_Type_free(&mpi_final_stats);
     
+    MPI_Type_free(&mpi_final_stats);
+
     tw_end();
     
     return 0;
