@@ -314,6 +314,14 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     s->resources = input_msg->rev_resources;
     s->size = input_msg->rev_size;
     s->offense = input_msg->rev_offense;
+    if (DEBUG){
+        printf("REVERSE: Reset LP %llu values to:\n", lp->gid);
+        printf("\tHealth: %ld/%lu\n", s->health, s->health_lim);
+        printf("\tAt war with: %ld\n", s->at_war_with);
+        printf("\tresources: %ld\n", s->resources);
+        printf("\tsize: %ld\n", s->size);
+        printf("\toffense: %ld\n", s->offense);
+    }
     switch (input_msg->type) {
         case FORCE_PEACE:
             //s->at_war_with = input_msg->sender;
