@@ -22,7 +22,7 @@
 #define DOWNSCALE_LIM 1
 #define UPSCALE_LIM (100 - HEALTH_LIM)//2 maybe replace this with something to do with the new LP-specific health maximum...
 #define DEFAULT_DEMAND_AMT 7
-#define NUMLPS 5
+#define NUMLPS 512
 #define DEBUG 0
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
@@ -139,6 +139,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             
         case FIGHT:
             if (input_msg->sender == s->at_war_with && s->at_war_with != -1){   // Sanity check
+                field0 = 1;
                 s->health -= input_msg->damage; // Take damage from attack
                 // Now, based on current health and offensive capability compared to the enemy's, either surrender or fight back:
                 if ( (s->health-input_msg->damage) < HEALTH_LIM ){
@@ -174,7 +175,8 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 }
             }
             else {
-                fprintf(stderr, "ERROR: LP %llu says someone we weren't fighting tried to fight without a declaration.\n",lp->gid);
+                field0 = 0;
+                fprintf(stderr, "ERROR: LP %llu says someone we weren't fighting tried to fight without a declaration.\n",lp->gid); // The problem is realy more like this lp declared war and then got into a different fight before a response came in...
                 fprintf(stderr, "ERROR: \"enemy\" gid: %llu\n",input_msg->sender);
                 fprintf(stderr, "ERROR: our at_war_with: %ld \n", s->at_war_with);
                 fprintf(stderr, "SENDING CANCEL WAR MESSAGE\n");
@@ -182,8 +184,9 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 new_message = tw_event_data(current_event);
                 new_message->type = CANCEL_WAR;
                 new_message->sender = lp->gid;
-                new_message->offering = input_msg->offering;
+                new_message->offering = -1;
                 tw_event_send(current_event);
+                s->wars_started --;
             }
             break;
             
@@ -274,7 +277,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             
         case SURRENDER:
             if (input_msg->sender == s->at_war_with && s->at_war_with != -1){
-                // Note: we don't need to set any bitfield values since the else statement is irreversible (EXIT_FAILURE).
+                field0 = 1;
                 // Accept the offering and reset at_war_with to -1
                 fprintf(stderr, "NOTE: LP %ld just made peace with LP %llu.\n", s->at_war_with, lp->gid);
                 s->at_war_with = -1;
@@ -282,6 +285,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 s->times_won ++;
             }
             else {
+                field0 = 0;
                 fprintf(stderr, "ERROR: LP %llu says: Someone we weren't fighting with asked to make peace.\n", lp->gid);
                 fprintf(stderr, "ERROR: \"enemy\" gid: %llu\n",input_msg->sender);
                 fprintf(stderr, "ERROR: our at_war_with: %ld \n", s->at_war_with);
@@ -292,6 +296,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
                 new_message->sender = lp->gid;
                 new_message->offering = input_msg->offering;
                 tw_event_send(current_event);
+                s->wars_started --;
             }
             break;
             
@@ -302,7 +307,7 @@ void event_handler(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             break;
         case CANCEL_WAR:
             s->at_war_with = -1;
-            if (input_msg->offering){
+            if (input_msg->offering > -1){
                 s->resources += input_msg->offering;
                 s->times_defeated --;
             }
@@ -319,7 +324,7 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
     switch (input_msg->type) {
         case CANCEL_WAR:
             s->at_war_with = input_msg->sender;
-            if (input_msg->offering){
+            if (input_msg->offering > -1){
                 s->resources -= input_msg->offering;
                 s->times_defeated ++;
             }
@@ -329,9 +334,14 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             s->wars_started ++;
             break;
         case SURRENDER:
-            s->times_won --;
-            s->resources -= input_msg->offering;
-            s->at_war_with = input_msg->sender;
+            if (field0){
+                s->times_won --;
+                s->resources -= input_msg->offering;
+                s->at_war_with = input_msg->sender;
+            }
+            else {
+                s->wars_started ++;
+            }
             break;
         case ADD_RESOURCES:
             if (field1 && !field2) {
@@ -364,12 +374,17 @@ void event_handler_reverse(state *s, tw_bf *bf, message *input_msg, tw_lp *lp){
             tw_rand_reverse_unif(lp->rng);
             break;
         case FIGHT:
-            if (!field1) {
-                s->resources += input_msg->demands;
-                s->at_war_with = input_msg->sender;
-                s->times_defeated --;
+            if (field0){
+                if (!field1) {
+                    s->resources += input_msg->demands;
+                    s->at_war_with = input_msg->sender;
+                    s->times_defeated --;
+                }
+                s->health += input_msg->damage;
             }
-            s->health += input_msg->damage;
+            else {
+                s->wars_started ++;
+            }
             break;
         case DECLARE_WAR:
             if (!field0) {
