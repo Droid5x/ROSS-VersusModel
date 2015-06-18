@@ -15,7 +15,7 @@
 #include <stddef.h>
 #include <assert.h>
 
-#define RESOURCERATE 0.16
+#define RESOURCERATE 0.50
 #define SCALE_AMT 20
 #define HEALTH_LIM 8
 #define RESOURCE_LIM 0
@@ -23,7 +23,7 @@
 #define UPSCALE_LIM (100 - HEALTH_LIM)//2 maybe replace this with something to do with the new LP-specific health maximum...
 #define DEFAULT_DEMAND_AMT 7
 #define NUMLPS 5
-#define DEBUG 1
+#define DEBUG 0
 
 final_stats * global_stats; // Used to properly print the stats for all the LPs
 char reverse_flag = 0;
@@ -52,7 +52,7 @@ void init(state *s, tw_lp *lp){
                                                             // we need to avoid divide by zero errors and generate numbers only from 1 to some upper bound.
         s->size = tw_rand_integer(lp->rng, 20, 36);
         s->at_war_with = -1;
-        s->health_lim = (int)(s->size/s->offense);
+        s->health_lim = tw_rand_integer(lp->rng, s->health, s->health + 50);
     }
     s->times_defeated = 0;
     s->times_won = 0;
@@ -498,11 +498,11 @@ int myModel3_main(int argc, char *argv[]){
     int blocklengths[9] = {1,1,1,1,1,1,1,1,1};
     
     MPI_Datatype types[9] = {
-        MPI_LONG_INT, MPI_LONG_INT,
-        MPI_LONG_INT, MPI_LONG_INT,
-        MPI_LONG_INT, MPI_LONG_INT,
-        MPI_LONG_INT, MPI_LONG_INT,
-        MPI_LONG_INT
+        MPI_LONG_LONG_INT, MPI_LONG_LONG_INT,
+        MPI_LONG_LONG_INT, MPI_LONG_LONG_INT,
+        MPI_LONG_LONG_INT, MPI_LONG_LONG_INT,
+        MPI_LONG_LONG_INT, MPI_LONG_LONG_INT,
+        MPI_LONG_LONG_INT
     };
     
     MPI_Datatype mpi_final_stats;
